@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "eval-dashboard",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "-m", "eval.dashboard"],
+      "port": 8770
+    }
+  ]
+}

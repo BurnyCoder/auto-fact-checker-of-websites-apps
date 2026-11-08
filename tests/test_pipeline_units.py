@@ -164,3 +164,28 @@ def test_cache_exact_fuzzy_and_no_failures(tmp_path):
     bad.incomplete = True
     cache.put("x claim", bad)
     assert cache.get("x claim") is None
+
+
+async def test_verdict_carries_compact_evidence(scripted):
+    out = '{"title":"Fact check: tower","url":"https://a.org/p"} more text'
+    trace = [ToolEvent(id="1", name="WebSearch", input={"query": "tower"}, output=out),
+             ToolEvent(id="2", name="StructuredOutput", input={}, output="ok")]
+    runner = scripted([AgentRun(run_id="r", ok=True, structured=good_verdict(), trace=trace)])
+    v = await verify_claim(CLAIM, runner, VerifyConfig(verify_quotes=False), purpose="test", context="")
+    assert len(v.evidence) == 1 and v.evidence[0]["titles"] == ["Fact check: tower"]
+    assert v.evidence[0]["urls"] == ["a.org/p"]
+
+
+async def test_structured_output_failure_is_salvaged_from_evidence(scripted):
+    trace = [ToolEvent(id="1", name="WebSearch", input={"query": "x"}, output="https://a.org/p evidence")]
+    failed = AgentRun(run_id="r", ok=False, error="ResultError: Failed to provide valid structured output after 5 attempts",
+                      trace=trace, cost_usd=0.02)
+    runner = scripted([failed, AgentRun(run_id="r2", ok=True, structured=good_verdict(), cost_usd=0.001)])
+    v = await verify_claim(CLAIM, runner, VerifyConfig(verify_quotes=False), purpose="test", context="")
+    assert "salvaged" in v.flags and v.label == "Supported" and not v.error
+    assert runner.calls[1]["kind"] == "repair" and runner.calls[1]["tools"] == []
+
+
+def test_schema_requires_only_core_fields():
+    from factcheck.pipeline.prompts import VERDICT_SCHEMA
+    assert VERDICT_SCHEMA["required"] == ["label", "confidence", "confidence_reasoning", "explanation"]

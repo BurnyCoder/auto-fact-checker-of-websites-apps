@@ -58,6 +58,7 @@ eval = [
 asyncio_mode = "auto"                 # async test functions run without decorators (pytest-asyncio)
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["."]                    # lets tests import the top-level eval/ package
 markers = ["network: needs internet access", "live: calls the real Claude API (costs money; opt-in)"]
 addopts = "-m 'not live'"
 filterwarnings = ["ignore::SyntaxWarning:pysbd.*"]
