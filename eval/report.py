@@ -102,26 +102,41 @@ def paired(rows_a: list[dict], rows_b: list[dict]) -> dict:
             "macro_f1_diff": m.paired_bootstrap(m.macro_f1, gold, pa, pb)}
 
 
+URL_RE = re.compile(r"https?://[^\s\"'<>\]\)\}]+")
+
+
 def leakage_audit(rows: list[dict], blocked_policy=None) -> dict:
-    """Preregistered audit: per claim, did the agent's tool results show the benchmark, fact-check titles/URLs,
-    or (blocked arm) a blocked domain? Returns rates and the flagged item ids for sensitivity analysis."""
-    flagged_bench, flagged_fc, flagged_blocked = set(), set(), set()
+    """Preregistered audit: per claim, did the agent's tool *results* show the benchmark name, a fact-check title/URL,
+    or (blocked arm) a blocked domain?
+
+    Only result content counts (titles + URLs found in each tool's output head), not tool *inputs*: a WebFetch the
+    hook refused, or a URL the agent merely tried, is not something it saw. (A first implementation also counted
+    input URLs; fixed to match the preregistered definition before the analysis was finalised.) Output heads are the
+    first 1,500 characters of each tool result, so links beyond that are not audited (a conservative undercount).
+    Blocked hits are split into whole-domain hits and fact-check URL-path hits (WebSearch can only filter domains)."""
+    flagged_bench, flagged_fc, flagged_domain, flagged_path = set(), set(), set(), set()
+    domain_only = None
+    if blocked_policy is not None:
+        from factcheck.pipeline.policy import UrlPolicy
+        domain_only = UrlPolicy(blocked_domains=blocked_policy.blocked_domains)
     for r in rows:
         ev = (r.get("verdict") or {}).get("evidence", [])
-        text = " ".join(" ".join(e.get("titles", [])) + " " + " ".join(e.get("urls", [])) + " " + e.get("output_head", "")
-                        for e in ev).lower()
-        if "averitec" in text or "checkthat" in text:
-            flagged_bench.add(r["item_id"])
+        heads = " ".join(e.get("output_head", "") for e in ev)
         titles = " ".join(" ".join(e.get("titles", [])) for e in ev).lower()
-        urls = " ".join(" ".join(e.get("urls", [])) for e in ev).lower()
-        if any(t in titles or t in urls for t in AUDIT_TERMS):
+        result_urls = URL_RE.findall(heads)
+        if "averitec" in heads.lower() or "checkthat" in heads.lower():
+            flagged_bench.add(r["item_id"])
+        if any(t in titles or t in u.lower() for t in AUDIT_TERMS for u in result_urls) or any(t in titles for t in AUDIT_TERMS):
             flagged_fc.add(r["item_id"])
-        if blocked_policy is not None and any(blocked_policy.check("https://" + u) for e in ev for u in e.get("urls", [])):
-            flagged_blocked.add(r["item_id"])
+        if blocked_policy is not None:
+            if any(domain_only.check(u) for u in result_urls):
+                flagged_domain.add(r["item_id"])
+            elif any(blocked_policy.check(u) for u in result_urls):
+                flagged_path.add(r["item_id"])
     n = max(1, len(rows))
     return {"n": len(rows), "benchmark_seen_rate": len(flagged_bench) / n, "factcheck_seen_rate": len(flagged_fc) / n,
-            "blocked_domain_seen_rate": len(flagged_blocked) / n,
-            "flagged_ids": sorted(flagged_bench | flagged_fc | flagged_blocked)}
+            "blocked_domain_seen_rate": len(flagged_domain) / n, "blocked_path_only_seen_rate": len(flagged_path) / n,
+            "flagged_ids": sorted(flagged_bench | flagged_fc | flagged_domain | flagged_path)}
 
 
 def h4_analysis(rows: list[dict], seed: int = 0) -> dict:
@@ -130,7 +145,7 @@ def h4_analysis(rows: list[dict], seed: int = 0) -> dict:
     texts = [r.get("text", "") for r in rows]
     rng = np.random.default_rng(seed)
     p = gold.mean()
-    rand_f1 = [m.binary_f1(gold, rng.random(len(gold)) < p) for _ in range(1000)]
+    rand_f1 = list(m._binary_f1_rows(np.broadcast_to(gold, (1000, len(gold))), rng.random((1000, len(gold))) < p))
     heur = np.array([heuristic_checkworthy(t) for t in texts], bool)
     out = {"n": len(rows), "positive_rate": float(p), "f1": m.binary_f1(gold, pred),
            "precision": float((gold & pred).sum() / max(1, pred.sum())), "recall": float((gold & pred).sum() / max(1, gold.sum())),
@@ -139,8 +154,8 @@ def h4_analysis(rows: list[dict], seed: int = 0) -> dict:
            "baseline_heuristic_f1": m.binary_f1(gold, heur)}
     best_name, best_pred = max((("all_positive", np.ones_like(gold)), ("heuristic", heur)), key=lambda kv: m.binary_f1(gold, kv[1]))
     out["best_baseline"] = best_name
-    out["permutation_p_vs_best"] = permutation_f1(gold, pred, best_pred)
-    out["f1_ci95"] = m.bootstrap_ci(lambda g, q: m.binary_f1(g, q), gold, pred)
+    out["permutation_p_vs_best"] = m.permutation_f1(gold, pred, best_pred)
+    out["f1_ci95"] = m.bootstrap_ci(m.binary_f1, gold, pred)
     return out
 
 
@@ -151,19 +166,6 @@ NUMBER_WORDS = re.compile(r"\d|percent|million|billion|trillion|thousand|hundred
 def heuristic_checkworthy(text: str) -> bool:
     """Preregistered heuristic baseline: a sentence is check-worthy if it mentions a number or a quantity/comparison word."""
     return bool(NUMBER_WORDS.search(text or ""))
-
-
-def permutation_f1(gold, pred_a, pred_b, n: int = 10_000, seed: int = 0) -> float:
-    """One-sided approximate randomisation test: P(F1(A) - F1(B) >= observed under swapping)."""
-    rng = np.random.default_rng(seed)
-    obs = m.binary_f1(gold, pred_a) - m.binary_f1(gold, pred_b)
-    hits = 0
-    for _ in range(n):
-        swap = rng.random(len(gold)) < 0.5
-        a = np.where(swap, pred_b, pred_a)
-        b = np.where(swap, pred_a, pred_b)
-        hits += (m.binary_f1(gold, a) - m.binary_f1(gold, b)) >= obs
-    return (hits + 1) / (n + 1)
 
 
 # ---------------------------------------------------------------------------------------------- figures
@@ -269,6 +271,52 @@ def fig_h4(h4: dict, name: str) -> str:
     return path.name
 
 
+def fig_architecture(name: str = "architecture") -> str:
+    """Static architecture diagram for the paper (the README uses a mermaid version of the same graph)."""
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+
+    fig, ax = plt.subplots(figsize=(10, 4.6), dpi=150)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 46)
+    ax.axis("off")
+    boxes = {
+        "ext": (2, 32, 18, 9, "Chrome extension\ncontent script → service worker"),
+        "ocr": (2, 6, 18, 11, "Desktop capture\nscreenshot → Windows OCR\n→ line grouping"),
+        "api": (25, 32, 15, 9, "Localhost server\nWebSocket + token"),
+        "svc": (44, 19, 15, 10, "FactCheckService\ndedup · cache · queue"),
+        "exr": (63, 33, 16, 8, "Extract claims\nHaiku, no tools"),
+        "ver": (63, 15, 16, 12, "Verify claim\nHaiku agent\n(schema-enforced verdict)"),
+        "tools": (83, 15, 15, 21, "Tools\nWebSearch · WebFetch\nfetch_file → /work\nbash (bubblewrap,\nWSL2, offline)"),
+        "chk": (63, 1, 16, 9, "Rules · repair pass\nURL-in-trace · quote check"),
+        "ui": (25, 1, 15, 9, "Overlay · panel ·\nhover card"),
+    }
+    for key, (x, y, w, h, label) in boxes.items():
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.4,rounding_size=1.2",
+                                    facecolor="#eef4fc" if key in ("ver", "exr") else "#f2f1ee", edgecolor="#b8b7b0", linewidth=1))
+        ax.text(x + w / 2, y + h / 2, label, ha="center", va="center", fontsize=7.6, color=TEXT)
+
+    def arrow(a, b, label=""):
+        (x1, y1), (x2, y2) = a, b
+        ax.add_patch(FancyArrowPatch((x1, y1), (x2, y2), arrowstyle="-|>", mutation_scale=9, color=MUTED, linewidth=1))
+        if label:
+            ax.text((x1 + x2) / 2, (y1 + y2) / 2 + 1, label, fontsize=6.5, color=MUTED, ha="center")
+
+    arrow((20.6, 36.5), (24.6, 36.5), "Port")
+    arrow((40.6, 35), (44, 27.5))
+    arrow((20.6, 11.5), (44, 21), "text blocks")
+    arrow((59.6, 27), (63, 35), "new blocks")
+    arrow((59.6, 23), (63, 21), "claims")
+    arrow((79.6, 21), (82.6, 23))
+    arrow((71, 14.6), (71, 10.4))
+    arrow((62.6, 5.5), (40.6, 5.5), "verdict events")
+    arrow((40.6, 7.5), (40.6, 32), "")
+    fig.tight_layout()
+    path = FIG / f"{name}.png"
+    fig.savefig(path)
+    plt.close(fig)
+    return path.name
+
+
 # ---------------------------------------------------------------------------------------------- tables
 def pct(x, digits=1):
     return "–" if x is None else f"{100 * x:.{digits}f} %"
@@ -293,6 +341,273 @@ def table_per_class(arms: dict[str, dict]) -> str:
                             for k, a in arms.items()) + "\n"
 
 
+# ---------------------------------------------------------------------------------------------- narrative blocks
+def fmt_p(p: float | None) -> str:
+    return "–" if p is None else ("< 0.001" if p < 0.001 else f"{p:.3f}")
+
+
+def p_text(p: float | None) -> str:
+    """'p < 0.001' or 'p = 0.412' style fragment."""
+    f = fmt_p(p)
+    return f"p {f}" if f.startswith("<") else f"p = {f}"
+
+
+def pts(x: float) -> str:
+    return f"{100 * x:+.1f}"
+
+
+def decision_h(p_holm: float | None, diff: float) -> str:
+    if p_holm is None:
+        return "not run"
+    return "**supported**" if p_holm < 0.05 and diff > 0 else "not supported (inconclusive at this sample size)"
+
+
+def blocks_confirmatory(s: dict) -> dict[str, str]:
+    out = {}
+    holm = s.get("holm_ref", {})
+    rows = ["| Hypothesis | Comparison | n | Accuracy diff (pts) [95 % CI] | Macro-F1 diff (pts) [95 % CI] | A-only / B-only | p (one-sided) | p (Holm) | Decision |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    for h, label in (("H1", "web, fact-checks blocked − closed-book"), ("H2", "web default − web, fact-checks blocked")):
+        if h not in s:
+            continue
+        t = s[h]
+        ad, fd, mc = t["accuracy_diff"], t["macro_f1_diff"], t["mcnemar"]
+        ph = holm.get(h, {}).get("p_holm")
+        rows.append(f"| {h} | {label} | {t['n_paired']} | {pts(ad['diff'])} [{pts(ad['ci95'][0])}, {pts(ad['ci95'][1])}] | "
+                    f"{pts(fd['diff'])} [{pts(fd['ci95'][0])}, {pts(fd['ci95'][1])}] | {mc['b_a_only']} / {mc['c_b_only']} | "
+                    f"{fmt_p(mc['p_one_sided'])} | {fmt_p(ph)} | {decision_h(ph, ad['diff'])} |")
+    out["h12_tests"] = "\n".join(rows) + "\n"
+    sens = s.get("sensitivity_excluding_flagged", {})
+    srows = [(f"Claims flagged by the leakage audit in either web arm: **{sens.get('n_excluded', 0)}**. Re-running the "
+              "paired tests without them:"), "","| Hypothesis | n | Accuracy diff (pts) [95 % CI] | p (one-sided, uncorrected) |", "|---|---|---|---|"]
+    for h in ("H1", "H2"):
+        if h in sens:
+            t = sens[h]
+            srows.append(f"| {h} | {t['n_paired']} | {pts(t['accuracy_diff']['diff'])} [{pts(t['accuracy_diff']['ci95'][0])}, "
+                         f"{pts(t['accuracy_diff']['ci95'][1])}] | {fmt_p(t['mcnemar']['p_one_sided'])} |")
+    ex = s.get("exploratory_h1_blocked_arm_flags_only")
+    if ex:
+        srows += ["", (f"*Exploratory (not preregistered):* H1 excluding only the {ex['n_excluded']} claims flagged in the blocked arm: "
+                       f"n = {ex['n_paired']}, {pts(ex['accuracy_diff']['diff'])} pts [{pts(ex['accuracy_diff']['ci95'][0])}, "
+                       f"{pts(ex['accuracy_diff']['ci95'][1])}], one-sided p = {fmt_p(ex['mcnemar']['p_one_sided'])}. The excluded "
+                       "claims are not a random subset (claims with published fact-checks are the better-known ones), so "
+                       "neither restricted estimate is an unbiased estimate for new claims.")]
+    out["sensitivity"] = "\n".join(srows) + "\n"
+    arows = ["| Web arm | n | benchmark name seen | fact-check title/URL seen | blocked domain seen |", "|---|---|---|---|---|"]
+    for arm, a in (s.get("audit") or {}).items():
+        arows.append(f"| {ARM_NAMES[arm]} | {a['n']} | {pct(a['benchmark_seen_rate'])} | {pct(a['factcheck_seen_rate'])} | "
+                     f"{pct(a['blocked_domain_seen_rate']) if arm == 'web_blocked' else '(not blocked)'} |")
+    out["audit"] = "\n".join(arows) + "\n"
+    crows = ["| Condition | Mean stated confidence | Accuracy | Brier | ECE (10 equal-mass bins) | Accuracy of the 50 % most confident |",
+             "|---|---|---|---|---|---|"]
+    for k, a in s["arms"].items():
+        half = next((x["accuracy"] for x in a["selective"] if x["coverage"] == 0.5), None)
+        crows.append(f"| {ARM_NAMES[k]} | {pct(a['mean_confidence'])} | {pct(a['accuracy'])} | {a['brier']:.3f} | {a['ece']:.3f} | {pct(half)} |")
+    out["calibration"] = "\n".join(crows) + "\n"
+    xrows = [("| Condition | 3-class acc. | Supported-vs-Refuted acc. (n) | Predicted S / R / NEE / C | Searches/claim | Sources/claim | "
+              "Source URL in agent's results | Quotes checkable | Quotes verified (of checkable) | Sandbox used | p95 latency | Failed checks |"),
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for k, a in s["arms"].items():
+        d = a["pred_distribution"]
+        xrows.append(f"| {ARM_NAMES[k]} | {pct(a['accuracy_3class'])} | {pct(a['accuracy_supported_vs_refuted_subset'])} "
+                     f"({a['n_supported_vs_refuted_subset']}) | {d['Supported']} / {d['Refuted']} / {d['Not Enough Evidence']} / "
+                     f"{d['Conflicting Evidence/Cherrypicking']} | {a['searches_per_claim']:.2f} | {a['sources_per_claim']:.2f} | "
+                     f"{pct(a['source_in_trace_rate'])} | {pct(a['quote_checked_rate'])} | {pct(a['quote_verified_rate_of_checked'])} | "
+                     f"{pct(a['sandbox_use_rate'])} | {a['latency_p95_s']:.0f} s | {a['errors']} |")
+    out["secondary"] = "\n".join(xrows) + "\n"
+    return out
+
+
+def blocks_h3(s3: dict) -> dict[str, str]:
+    d = s3["diff"]["accuracy_diff"]
+    lb = d["lower_one_sided_95"]
+    rows = ["| Arm | n | Accuracy | Extraction failed | Mean CER | Mean WER |", "|---|---|---|---|---|---|"]
+    for k, a in s3["arms"].items():
+        rows.append(f"| {ARM_NAMES[k]} | {a['n']} | {pct(a['accuracy'])} | {pct(a['extraction_failure_rate'])} | "
+                    f"{pct(a['cer_mean'], 2)} | {pct(a['wer_mean'], 2)} |")
+    rows += ["", (f"Difference OCR − clean: **{pts(d['diff'])} pts** (95 % CI [{pts(d['ci95'][0])}, {pts(d['ci95'][1])}]); "
+                  f"one-sided 95 % lower bound **{pts(lb)} pts** vs the preregistered margin −3.0 → "
+                  f"{'**non-inferior** (H3 supported)' if lb > -0.03 else '**non-inferiority not shown** (H3 not supported)'}. "
+                  f"Discordant pairs: OCR-only right {s3['diff']['mcnemar']['b_a_only']}, clean-only right {s3['diff']['mcnemar']['c_b_only']}."),
+             "", "| OCR cell | n | Accuracy | Mean CER |", "|---|---|---|---|"]
+    rows += [f"| {cell} | {v['n']} | {pct(v['accuracy'])} | {pct(v['cer_mean'], 2)} |" for cell, v in s3["by_cell"].items()]
+    return {"h3_table": "\n".join(rows) + "\n"}
+
+
+def blocks_h4(h4: dict, holm: dict) -> dict[str, str]:
+    ph = holm.get("H4", {}).get("p_holm")
+    best = max(h4["baseline_all_positive_f1"], h4["baseline_heuristic_f1"])
+    rows = ["| System | F1 (check-worthy) | Precision | Recall |", "|---|---|---|---|",
+            f"| Product extractor (Haiku, zero-shot) | {h4['f1']:.3f} [{h4['f1_ci95'][0]:.3f}, {h4['f1_ci95'][1]:.3f}] | {h4['precision']:.3f} | {h4['recall']:.3f} |",
+            f"| Number/quantity-word heuristic | {h4['baseline_heuristic_f1']:.3f} | – | – |",
+            f"| All positive | {h4['baseline_all_positive_f1']:.3f} | {h4['positive_rate']:.3f} | 1.000 |",
+            f"| Stratified random (1,000 draws) | {h4['baseline_random_f1_mean']:.3f} [{h4['baseline_random_f1_ci95'][0]:.3f}, {h4['baseline_random_f1_ci95'][1]:.3f}] | – | – |",
+            "", (f"Permutation test vs the best baseline ({h4['best_baseline']}, F1 {best:.3f}): {p_text(h4['permutation_p_vs_best'])}, "
+                 f"Holm-adjusted {p_text(ph)} → {decision_h(ph, h4['f1'] - best)}. For reference, published "
+                 "fine-tuned systems reached F1 ≈ 0.75–0.80 on this test set (e.g. RoBERTa 0.753, [IAI 2024](https://arxiv.org/abs/2408.01118)).")]
+    return {"h4_table": "\n".join(rows) + "\n"}
+
+
+def blocks_e2(e2: dict) -> dict[str, str]:
+    accs = ", ".join(pct(a) for a in e2["accuracy_by_repeat"])
+    return {"e2_table": f"Closed-book verifier run 3 times on the first {e2['n']} sampled claims: Fleiss' κ = **{e2['fleiss_kappa']:.3f}**, "
+                        f"identical label in all 3 runs for {pct(e2['all_three_agree_rate'])} of claims, accuracy per run {accs} "
+                        f"(SD {100 * e2['accuracy_sd']:.1f} pts).\n"}
+
+
+def blocks_e3(recs: list[dict]) -> dict[str, str]:
+    from collections import Counter
+
+    cnt = Counter(r.get("judgement") for r in recs)
+    n = max(1, len(recs))
+    rows = ["| Judge verdict | Count | Share |", "|---|---|---|"]
+    rows += [f"| {k} | {v} | {pct(v / n)} |" for k, v in cnt.most_common()]
+    verified = [q for r in recs for q in r.get("correction_sources_quote_verified", []) if q is not None]
+    rows += ["", (f"{len(recs)} corrections judged (web default arm, predicted Refuted or Conflicting). Correction sources whose quote "
+                  f"could be checked on the live page: {len(verified)}, of which verified {pct(sum(verified) / max(1, len(verified)))}.")]
+    return {"e3_table": "\n".join(rows) + "\n"}
+
+
+def blocks_budget() -> dict[str, str]:
+    from collections import defaultdict
+
+    path = ROOT / "budget_ledger.jsonl"
+    rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    groups: dict[str, float] = defaultdict(float)
+    for r in rows:
+        p = r["purpose"]
+        key = ("pilot" if p.startswith("pilot") else "evaluation" if p.startswith("eval") else
+               "app & demos" if p.startswith("app") else "development & tests")
+        groups[key] += r["cost_usd"]
+    total = sum(groups.values())
+    auth = defaultdict(float)
+    for r in rows:
+        auth[r["auth"]] += r["cost_usd"]
+    lines = ["| Phase | API-equivalent USD |", "|---|---|"] + [f"| {k} | ${v:.2f} |" for k, v in sorted(groups.items())]
+    api_part = f", via API key for ${auth['api_key']:.2f}" if auth.get("api_key") else ""
+    lines += [f"| **total** | **${total:.2f}** of $10.00 |", "",
+              f"{len(rows)} model calls; billed via subscription for ${auth.get('subscription', 0):.2f}{api_part}."]
+    return {"budget": "\n".join(lines) + "\n"}
+
+
+def blocks_eval_table(summary: dict) -> dict[str, str]:
+    """The one table CLAUDE.md asks for: method vs baselines, controls and ablations, with their role."""
+    rows = ["| Role | System | Benchmark | Metric | Score |", "|---|---|---|---|---|"]
+    c = summary.get("confirmatory", {})
+    if c:
+        rows.append(f"| Baseline | Always 'Refuted' (majority class) | AVeriTeC dev sample (n = {c['arms']['closed_book']['n']}) | accuracy | {pct(c['baseline_majority_accuracy'])} |")
+        rows.append("| Baseline | Uniform random label | AVeriTeC dev sample | accuracy | 25.0 % (expected) |")
+        for k, role in (("closed_book", "Control (no retrieval)"), ("web_blocked", "Ablation (no fact-check sites)"),
+                        ("web_default", "**Method (product)**")):
+            a = c["arms"].get(k)
+            if a:
+                rows.append(f"| {role} | {ARM_NAMES[k]} | AVeriTeC dev sample | accuracy / macro-F1 | {pct(a['accuracy'])} / {pct(a['macro_f1'])} |")
+    if "h3" in summary:
+        for k, role in (("h3_clean", "Control (ideal capture)"), ("h3_ocr", "**Method (screen path)**")):
+            a = summary["h3"]["arms"][k]
+            rows.append(f"| {role} | {ARM_NAMES[k]} → extract → closed-book verify | AVeriTeC dev (n = {a['n']}) | accuracy | {pct(a['accuracy'])} |")
+    if "h4" in summary:
+        h = summary["h4"]
+        rows += [f"| **Method** | Product extractor | CheckThat! 2024 T1 EN test (n = {h['n']}) | F1 | {h['f1']:.3f} |",
+                 f"| Baseline | Number/quantity heuristic | CheckThat! 2024 T1 EN test | F1 | {h['baseline_heuristic_f1']:.3f} |",
+                 f"| Baseline | All positive | CheckThat! 2024 T1 EN test | F1 | {h['baseline_all_positive_f1']:.3f} |",
+                 f"| Control | Stratified random | CheckThat! 2024 T1 EN test | F1 | {h['baseline_random_f1_mean']:.3f} |"]
+    return {"eval_table": "\n".join(rows) + "\n"}
+
+
+def blocks_readme(summary: dict) -> dict[str, str]:
+    """Plain-language headline results (numbers from summary; wording of the decision rule from the preregistration)."""
+    lines = []
+    c, holm = summary.get("confirmatory", {}), summary.get("holm", {})
+    for h, what in (("H1", "Web tools (fact-check sites blocked) vs answering from memory"),
+                    ("H2", "Allowing existing fact-check sites vs blocking them")):
+        if h in c:
+            d = c[h]["accuracy_diff"]
+            ph = holm.get(h, {}).get("p_holm")
+            lines.append(f"* **{h} — {what}:** {pts(d['diff'])} accuracy points (95 % CI {pts(d['ci95'][0])} to "
+                         f"{pts(d['ci95'][1])}; n = {c[h]['n_paired']}; Holm-adjusted {p_text(ph)}) → {decision_h(ph, d['diff'])}.")
+    if "h3" in summary:
+        d = summary["h3"]["diff"]["accuracy_diff"]
+        ok = d["lower_one_sided_95"] > -0.03
+        lines.append(f"* **H3 — Reading the claim through rendering + Windows OCR vs exact text:** {pts(d['diff'])} points "
+                     f"(one-sided 95 % lower bound {pts(d['lower_one_sided_95'])}; margin −3; n = {summary['h3']['diff']['n_paired']}; "
+                     f"mean OCR character error rate {pct(summary['h3']['arms']['h3_ocr']['cer_mean'], 2)}) → "
+                     f"{'**non-inferior**' if ok else '**non-inferiority not shown**'}.")
+    if "h4" in summary:
+        h = summary["h4"]
+        best = max(h["baseline_all_positive_f1"], h["baseline_heuristic_f1"])
+        ph = holm.get("H4", {}).get("p_holm")
+        lines.append(f"* **H4 — Finding check-worthy sentences (CheckThat! 2024):** F1 {h['f1']:.3f} vs best simple baseline "
+                     f"{best:.3f} (Holm-adjusted {p_text(ph)}) → {decision_h(ph, h['f1'] - best)}.")
+    if c.get("arms", {}).get("web_default"):
+        a = c["arms"]["web_default"]
+        lines.append(f"* **Confidence calibration (product setting):** mean stated confidence {pct(a['mean_confidence'])} vs "
+                     f"accuracy {pct(a['accuracy'])}; Brier {a['brier']:.3f}, ECE {a['ece']:.3f}.")
+    if "e2" in summary:
+        lines.append(f"* **Run-to-run variance (E2):** Fleiss' κ = {summary['e2']['fleiss_kappa']:.2f} across 3 runs; same label in all "
+                     f"runs for {pct(summary['e2']['all_three_agree_rate'])} of claims.")
+    if "e3" in summary and summary["e3"]["n"]:
+        j = summary["e3"]["judgements"]
+        lines.append(f"* **Corrections (E3):** of {summary['e3']['n']} corrections, the judge found {j['agrees']} consistent with the "
+                     f"professional fact-check, {j['partially']} partially, {j['disagrees']} contradicting, and {j['gold_supports_claim']} "
+                     "where the professional verdict says the claim was true.")
+    return {"readme_results": "\n".join(lines) + "\n"}
+
+
+def blocks_abstract(summary: dict) -> dict[str, str]:
+    c, holm = summary.get("confirmatory", {}), summary.get("holm", {})
+    if not c or "h3" not in summary or "h4" not in summary:
+        return {}
+    a = c["arms"]
+    h1, h2 = c["H1"]["accuracy_diff"], c["H2"]["accuracy_diff"]
+    h3 = summary["h3"]["diff"]["accuracy_diff"]
+    h4 = summary["h4"]
+    best = max(h4["baseline_all_positive_f1"], h4["baseline_heuristic_f1"])
+    p1, p2 = holm.get("H1", {}).get("p_holm"), holm.get("H2", {}).get("p_holm")
+    text = (f"On {a['closed_book']['n']} preregistered AVeriTeC dev claims, accuracy was {pct(a['closed_book']['accuracy'])} without web "
+            f"access, {pct(a['web_blocked']['accuracy'])} with web tools but all fact-checking sites blocked, and "
+            f"{pct(a['web_default']['accuracy'])} with the product's default web access (majority-class baseline "
+            f"{pct(c['baseline_majority_accuracy'])}). The retrieval effect with fact-checks blocked (H1) was {pts(h1['diff'])} points "
+            f"(95 % CI {pts(h1['ci95'][0])} to {pts(h1['ci95'][1])}; Holm {p_text(p1)}) and the added effect of reaching existing "
+            f"fact-checks (H2) was {pts(h2['diff'])} points (95 % CI {pts(h2['ci95'][0])} to {pts(h2['ci95'][1])}; Holm {p_text(p2)}). "
+            f"Reading claims from rendered pages through Windows OCR changed end-to-end accuracy by {pts(h3['diff'])} points on 500 "
+            f"claims (one-sided 95 % lower bound {pts(h3['lower_one_sided_95'])}; preregistered non-inferiority margin −3). The "
+            f"zero-shot claim extractor reached F1 {h4['f1']:.3f} on CheckThat! 2024 check-worthiness (best simple baseline {best:.3f}).")
+    return {"abstract_numbers": text + "\n"}
+
+
+# ---------------------------------------------------------------------------------------------- site export
+def _slim(r: dict) -> dict:
+    v = r.get("verdict") or {}
+    return {"pred": r.get("pred"), "correct": r.get("correct"), "confidence": r.get("confidence"),
+            "reasoning": v.get("confidence_reasoning", ""), "explanation": v.get("explanation", ""),
+            "correction": v.get("corrected_claim"), "flags": r.get("flags", []), "cost": r.get("cost_usd"),
+            "sources": [{"url": s.get("url"), "title": s.get("title"), "quote": s.get("quote"), "supports": s.get("supports"),
+                         "quote_verified": s.get("quote_verified"), "in_trace": s.get("in_trace")} for s in v.get("sources", [])],
+            "computations": [c.get("command") for c in v.get("computations", [])][:5]}
+
+
+def export_site(summary: dict) -> None:
+    """Write site/data/{summary,claims,h3}.json for the GitHub Pages explorer (site/index.html)."""
+    from eval.datasets import load_averitec
+
+    out = ROOT / "site" / "data"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    claims = {c.item_id: c for c in load_averitec("dev")}
+    arms = {c: by_id(load("confirmatory", c)) for c in ("closed_book", "web_blocked", "web_default")}
+    ids = sorted(set().union(*arms.values()), key=lambda i: int(i.split("-")[1]))
+    rows = [{"id": i, "claim": claims[i].claim, "gold": claims[i].label, "date": claims[i].claim_date,
+             "speaker": claims[i].speaker, "arms": {c: _slim(arms[c][i]) for c in arms if i in arms[c]}} for i in ids]
+    (out / "claims.json").write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    h3 = {c: by_id(load("h3", c)) for c in ("h3_clean", "h3_ocr")}
+    h3_rows = [{"id": i, "claim": claims[i].claim, "gold": claims[i].label, "layout": h3["h3_ocr"][i]["layout"],
+                "font_px": h3["h3_ocr"][i]["font_px"], "cer": h3["h3_ocr"][i]["cer"], "ocr_text": h3["h3_ocr"][i]["ocr_text"],
+                "clean_pred": h3["h3_clean"][i].get("pred"), "ocr_pred": h3["h3_ocr"][i].get("pred")}
+               for i in sorted(set(h3["h3_clean"]) & set(h3["h3_ocr"]), key=lambda i: int(i.split("-")[1]))]
+    (out / "h3.json").write_text(json.dumps(h3_rows, ensure_ascii=False), encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------------------------- template filling
 def fill(path: Path, blocks: dict[str, str]) -> None:
     """Replace <!-- GEN:key --> ... <!-- /GEN:key --> regions in a markdown file."""
@@ -303,11 +618,12 @@ def fill(path: Path, blocks: dict[str, str]) -> None:
         body = value.strip()
         text = re.sub(rf"(<!-- GEN:{key} -->)(.*?)(<!-- /GEN:{key} -->)",
                       lambda mt, body=body: f"{mt.group(1)}\n{body}\n{mt.group(3)}", text, flags=re.DOTALL)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")   # LF: avoid CRLF churn on Windows
 
 
 def main() -> None:
     FIG.mkdir(parents=True, exist_ok=True)
+    fig_architecture()
     GEN.mkdir(parents=True, exist_ok=True)
     summary: dict = {}
     blocks: dict[str, str] = {}
@@ -332,6 +648,11 @@ def main() -> None:
                 s["sensitivity_excluding_flagged"]["H1"] = paired(clean["web_blocked"], clean["closed_book"])
             if {"web_default", "web_blocked"} <= set(clean) and clean["web_default"]:
                 s["sensitivity_excluding_flagged"]["H2"] = paired(clean["web_default"], clean["web_blocked"])
+            # EXPLORATORY (not preregistered): for H1 only the blocked arm's flags are relevant
+            if "web_blocked" in s.get("audit", {}):
+                fb = set(s["audit"]["web_blocked"]["flagged_ids"])
+                cb = {c: [r for r in rows[c] if r["item_id"] not in fb] for c in ("web_blocked", "closed_book")}
+                s["exploratory_h1_blocked_arm_flags_only"] = {"n_excluded": len(fb), **paired(cb["web_blocked"], cb["closed_book"])}
         dev_counts = {lab: sum(1 for r in next(iter(rows.values())) if r["gold"] == lab) for lab in LABELS}
         majority = max(dev_counts.values()) / max(1, sum(dev_counts.values()))
         s["baseline_majority_accuracy"] = majority
@@ -382,7 +703,29 @@ def main() -> None:
         pvals["H4"] = summary["h4"]["permutation_p_vs_best"]
     if pvals:
         summary["holm"] = m.holm(pvals)
+    if "confirmatory" in summary:
+        summary["confirmatory"]["holm_ref"] = summary.get("holm", {})
+        blocks.update(blocks_confirmatory(summary["confirmatory"]))
+    if "h3" in summary:
+        blocks.update(blocks_h3(summary["h3"]))
+    if "h4" in summary:
+        blocks.update(blocks_h4(summary["h4"], summary.get("holm", {})))
+    if "e2" in summary:
+        blocks.update(blocks_e2(summary["e2"]))
+    e3_file = RESULTS / "e3" / "judgements.jsonl"
+    if e3_file.exists():
+        recs = [json.loads(x) for x in e3_file.read_text(encoding="utf-8").splitlines() if x.strip()]
+        summary["e3"] = {"n": len(recs), "judgements": {k: sum(r.get("judgement") == k for r in recs)
+                                                       for k in ("agrees", "partially", "disagrees", "gold_supports_claim", "error")}}
+        blocks.update(blocks_e3(recs))
+    blocks.update(blocks_budget())
+    blocks.update(blocks_eval_table(summary))
+    blocks.update(blocks_readme(summary))
+    blocks.update(blocks_abstract(summary))
+    for key, text in blocks.items():
+        (GEN / f"{key}.md").write_text(text, encoding="utf-8")
     (RESULTS / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    export_site(summary)
     for target in [ROOT / "README.md", *sorted((ROOT / "reports").glob("*.md")), ROOT / "reports" / "paper" / "paper.md"]:
         fill(target, blocks)
     print(json.dumps({k: (v.get("H1", {}).get("accuracy_diff") if isinstance(v, dict) else v) for k, v in summary.items()}, indent=1)[:1500])

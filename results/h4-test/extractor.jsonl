@@ -1,0 +1,341 @@
+{"item_id": "35988", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "35991", "gold": true, "pred": true, "claims": ["The speaker moved to bring troops home at some point after the Iraq-related events described earlier."], "sdk_version": "0.2.179"}
+{"item_id": "36029", "gold": false, "pred": true, "claims": ["The speaker sits on the Senate Armed Services Committee."], "sdk_version": "0.2.179"}
+{"item_id": "36043", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36063", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36071", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36132", "gold": true, "pred": true, "claims": ["Trump has sent more troops to the Middle East."], "sdk_version": "0.2.179"}
+{"item_id": "36149", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36173", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36214", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36235", "gold": true, "pred": true, "claims": ["Iran has started enriching uranium again in violation of the original nuclear agreement."], "sdk_version": "0.2.179"}
+{"item_id": "36253", "gold": true, "pred": true, "claims": ["The speaker, as vice president, met with Xi Jinping more than any other person."], "sdk_version": "0.2.179"}
+{"item_id": "36257", "gold": true, "pred": true, "claims": ["Iran's Supreme Leader said Joe Biden is a rabid dog and should be beaten to death with a stick."], "sdk_version": "0.2.179"}
+{"item_id": "36284", "gold": true, "pred": true, "claims": ["The speaker voted against NAFTA and against permanent normal trade relations with China.", "Workers in Mexico, China, and elsewhere earn $1 or $2 an hour."], "sdk_version": "0.2.179"}
+{"item_id": "36295", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36363", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36424", "gold": true, "pred": true, "claims": ["A video exists of the speaker from 30 years earlier discussing how a woman could become president of the United States."], "sdk_version": "0.2.179"}
+{"item_id": "36471", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36484", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36486", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36519", "gold": true, "pred": true, "claims": ["Hillary Clinton received 3 million more votes than Trump in the 2016 presidential election."], "sdk_version": "0.2.179"}
+{"item_id": "36535", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36599", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36671", "gold": true, "pred": true, "claims": ["Pharmaceutical companies in some cases charge Americans 10 times more for the same prescription drugs than they charge abroad."], "sdk_version": "0.2.179"}
+{"item_id": "36672", "gold": true, "pred": true, "claims": ["The health care industry makes $100 billion a year in profit from the administrative costs of insurance.", "The United States spends $500 billion a year on administrative costs of dealing with thousands of separate insurance plans."], "sdk_version": "0.2.179"}
+{"item_id": "36680", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36684", "gold": true, "pred": true, "claims": ["The speaker is the only candidate on stage with a website plan to start reducing the deficit."], "sdk_version": "0.2.179"}
+{"item_id": "36705", "gold": false, "pred": true, "claims": ["Democrats have a dramatically better track record on deficit reduction than Republicans."], "sdk_version": "0.2.179"}
+{"item_id": "36707", "gold": true, "pred": true, "claims": ["The speaker's proposals, including Medicare for all, infrastructure investments, and climate change measures, are fully paid for."], "sdk_version": "0.2.179"}
+{"item_id": "36716", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37158", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37183", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37184", "gold": true, "pred": true, "claims": ["The Recovery Act put more money into moving away from fossil fuels toward solar and wind energy than has ever occurred in the history of America."], "sdk_version": "0.2.179"}
+{"item_id": "37204", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37207", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37271", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37344", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37358", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37385", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37429", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37455", "gold": true, "pred": true, "claims": ["The President has made it clear that he wants to get rid of the Affordable Care Act."], "sdk_version": "0.2.179"}
+{"item_id": "37464", "gold": true, "pred": true, "claims": ["About one hundred million people have pre-existing conditions."], "sdk_version": "0.2.179"}
+{"item_id": "37467", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37472", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37491", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36723", "gold": true, "pred": true, "claims": ["Chevron and Amazon paid nothing in federal taxes."], "sdk_version": "0.2.179"}
+{"item_id": "36740", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36871", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36891", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36905", "gold": true, "pred": true, "claims": ["The United States is one of only a few countries that does not have universal high-quality affordable childcare."], "sdk_version": "0.2.179"}
+{"item_id": "36917", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "36920", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37000", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37012", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37014", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37020", "gold": true, "pred": true, "claims": ["The speaker's side has asked for only four witnesses."], "sdk_version": "0.2.179"}
+{"item_id": "37033", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37072", "gold": true, "pred": true, "claims": ["Climate change has affected America from coast to coast."], "sdk_version": "0.2.179"}
+{"item_id": "37099", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37147", "gold": true, "pred": true, "claims": ["The speaker has a 100 percent rating from the League of Conservation Voters."], "sdk_version": "0.2.179"}
+{"item_id": "37880", "gold": true, "pred": true, "claims": ["The military can deliver 200,000 soldiers a day."], "sdk_version": "0.2.179"}
+{"item_id": "37909", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37921", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37937", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37970", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38006", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38042", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38145", "gold": true, "pred": true, "claims": ["There are fewer jobs now than when the president took office."], "sdk_version": "0.2.179"}
+{"item_id": "38159", "gold": true, "pred": true, "claims": ["The opposing party has done nothing to help small businesses."], "sdk_version": "0.2.179"}
+{"item_id": "38172", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38177", "gold": false, "pred": true, "claims": ["New York has become almost like a ghost town."], "sdk_version": "0.2.179"}
+{"item_id": "38180", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38195", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38226", "gold": false, "pred": true, "claims": ["The document or story referred to was given to the speaker by the Obama Administration."], "sdk_version": "0.2.179"}
+{"item_id": "38260", "gold": true, "pred": true, "claims": ["The proposal would create an additional $1 trillion in economic growth."], "sdk_version": "0.2.179"}
+{"item_id": "37516", "gold": true, "pred": true, "claims": ["China was heavily infected with COVID-19."], "sdk_version": "0.2.179"}
+{"item_id": "37526", "gold": true, "pred": true, "claims": ["The President is opposed to Roe v. Wade."], "sdk_version": "0.2.179"}
+{"item_id": "37564", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37568", "gold": true, "pred": true, "claims": ["The individual mandate was the most unpopular aspect of Obamacare."], "sdk_version": "0.2.179"}
+{"item_id": "37583", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37591", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37620", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37626", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37684", "gold": false, "pred": true, "claims": ["Premiums under Obamacare are too high."], "sdk_version": "0.2.179"}
+{"item_id": "37719", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37758", "gold": false, "pred": true, "claims": ["The person being discussed knew the disease was deadly."], "sdk_version": "0.2.179"}
+{"item_id": "37799", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "37831", "gold": true, "pred": true, "claims": ["A former Chief of Staff of the President publicly said the President was a disaster."], "sdk_version": "0.2.179"}
+{"item_id": "37832", "gold": true, "pred": true, "claims": ["Fourteen thousand people died (not 200,000) in the event being discussed."], "sdk_version": "0.2.179"}
+{"item_id": "37865", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38287", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38293", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38316", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38328", "gold": true, "pred": true, "claims": ["The speaker brought back the automobile industry."], "sdk_version": "0.2.179"}
+{"item_id": "38329", "gold": true, "pred": true, "claims": ["The person referred to as 'he' gave up on manufacturing."], "sdk_version": "0.2.179"}
+{"item_id": "38332", "gold": true, "pred": true, "claims": ["The speaker's side brought companies back to manufacturing in Ohio and Michigan."], "sdk_version": "0.2.179"}
+{"item_id": "38337", "gold": false, "pred": true, "claims": ["Ohio had its best year ever last year."], "sdk_version": "0.2.179"}
+{"item_id": "38598", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38620", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38654", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38719", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38728", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38753", "gold": true, "pred": true, "claims": ["The speaker sent US Marshals into a situation."], "sdk_version": "0.2.179"}
+{"item_id": "38803", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38806", "gold": false, "pred": true, "claims": ["Almost everything the speaker sees is from the left wing rather than the right wing."], "sdk_version": "0.2.179"}
+{"item_id": "38826", "gold": true, "pred": true, "claims": ["Antifa is an idea, not an organization."], "sdk_version": "0.2.179"}
+{"item_id": "38827", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38840", "gold": true, "pred": true, "claims": ["Antifa is a dangerous radical group."], "sdk_version": "0.2.179"}
+{"item_id": "38851", "gold": false, "pred": true, "claims": ["No previous administration has done what the speaker has done."], "sdk_version": "0.2.179"}
+{"item_id": "38869", "gold": false, "pred": true, "claims": ["When the speaker leaves office, he will not leave any judges (vacancies unfilled)."], "sdk_version": "0.2.179"}
+{"item_id": "38921", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38924", "gold": true, "pred": true, "claims": ["Hunter Biden was thrown out of the military."], "sdk_version": "0.2.179"}
+{"item_id": "38942", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "38976", "gold": false, "pred": true, "claims": ["The administration's current numbers are performing phenomenally."], "sdk_version": "0.2.179"}
+{"item_id": "39000", "gold": false, "pred": true, "claims": ["Trees in some other place ignite much more easily than trees in California."], "sdk_version": "0.2.179"}
+{"item_id": "39009", "gold": true, "pred": true, "claims": ["Energy prices were driven through the sky."], "sdk_version": "0.2.179"}
+{"item_id": "39011", "gold": true, "pred": true, "claims": ["The car is much less expensive and much safer than before."], "sdk_version": "0.2.179"}
+{"item_id": "39020", "gold": true, "pred": true, "claims": ["Cars have computers all over the place that cost an extra little bit of gasoline."], "sdk_version": "0.2.179"}
+{"item_id": "39042", "gold": false, "pred": true, "claims": ["The policies created millions of good-paying jobs."], "sdk_version": "0.2.179"}
+{"item_id": "39055", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39116", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39204", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39212", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39225", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39249", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39255", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39284", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39286", "gold": true, "pred": true, "claims": ["At least 1% of the ballots for the 2016 election were invalidated."], "sdk_version": "0.2.179"}
+{"item_id": "39317", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39326", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39437", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39482", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39509", "gold": true, "pred": true, "claims": ["There are over 70,000 new cases per day."], "sdk_version": "0.2.179"}
+{"item_id": "39513", "gold": true, "pred": true, "claims": ["Wearing masks could save 100,000 lives.", "The President's own advisors have told him that wearing masks could save 100,000 lives."], "sdk_version": "0.2.179"}
+{"item_id": "39530", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39569", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39571", "gold": false, "pred": true, "claims": ["The administration discussed using the Defense Production Act to obtain needed supplies to protect people."], "sdk_version": "0.2.179"}
+{"item_id": "39583", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39591", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39636", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39643", "gold": true, "pred": true, "claims": ["The opposing candidate called the speaker racist."], "sdk_version": "0.2.179"}
+{"item_id": "39666", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39670", "gold": true, "pred": true, "claims": ["The opposing candidate has refused to support funding for ventilation systems, smaller classes, more teachers, and pods (as of the speaker's remark)."], "sdk_version": "0.2.179"}
+{"item_id": "39701", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39744", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39745", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39764", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39765", "gold": true, "pred": true, "claims": ["Anthony (apparently Anthony Fauci) said people should not wear masks."], "sdk_version": "0.2.179"}
+{"item_id": "39787", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39792", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39827", "gold": true, "pred": true, "claims": ["Russia (the President being referred to) is paying bounties to kill American soldiers in Afghanistan."], "sdk_version": "0.2.179"}
+{"item_id": "39864", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39866", "gold": true, "pred": true, "claims": ["The speaker has never taken money from any foreign source in their life."], "sdk_version": "0.2.179"}
+{"item_id": "39880", "gold": true, "pred": true, "claims": ["China is building a new road to a golf course the opponent owns overseas."], "sdk_version": "0.2.179"}
+{"item_id": "39894", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39903", "gold": true, "pred": true, "claims": ["The speaker does not make money from Ukraine, while the opponent does."], "sdk_version": "0.2.179"}
+{"item_id": "39904", "gold": true, "pred": true, "claims": ["The speaker does not make money from Russia."], "sdk_version": "0.2.179"}
+{"item_id": "39926", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "39963", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40020", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40023", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40055", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40062", "gold": false, "pred": true, "claims": ["The speaker grew up in Scranton and Claymont."], "sdk_version": "0.2.179"}
+{"item_id": "40069", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40087", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40092", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40106", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40155", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40160", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40187", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40220", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40222", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40239", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40241", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40257", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40262", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40330", "gold": true, "pred": true, "claims": ["The HEROES Act has been sitting in Congress without being passed into law."], "sdk_version": "0.2.179"}
+{"item_id": "40340", "gold": true, "pred": true, "claims": ["The HEROES Act would send billions of dollars to cities."], "sdk_version": "0.2.179"}
+{"item_id": "40344", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40353", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40413", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40467", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40468", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40477", "gold": true, "pred": true, "claims": ["The administration referred to eliminated the catch-and-release policy."], "sdk_version": "0.2.179"}
+{"item_id": "40517", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40531", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40536", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40549", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40554", "gold": false, "pred": true, "claims": ["The politician referred to has been in government for 47 years."], "sdk_version": "0.2.179"}
+{"item_id": "40586", "gold": true, "pred": true, "claims": ["The politician referred to said, \"There's not enough people in jail.\""], "sdk_version": "0.2.179"}
+{"item_id": "40588", "gold": true, "pred": true, "claims": ["The politician referred to continued to push for the Central Park Five to receive the death penalty."], "sdk_version": "0.2.179"}
+{"item_id": "40595", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40618", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40620", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40626", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40637", "gold": true, "pred": true, "claims": ["50 former national intelligence officials said the accusation against the speaker is a Russian plan."], "sdk_version": "0.2.179"}
+{"item_id": "40647", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40668", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40670", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40675", "gold": true, "pred": true, "claims": ["The opponent began his campaign by coming down an escalator and saying he would get rid of 'Mexican rapists'."], "sdk_version": "0.2.179"}
+{"item_id": "40711", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40715", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40727", "gold": true, "pred": true, "claims": ["There were over 1000 people given clemency."], "sdk_version": "0.2.179"}
+{"item_id": "40736", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40740", "gold": false, "pred": true, "claims": ["The speaker's opponent served eight years as vice president under Barack Obama."], "sdk_version": "0.2.179"}
+{"item_id": "40762", "gold": true, "pred": true, "claims": ["Carbon emission numbers are the best they have been in 35 years."], "sdk_version": "0.2.179"}
+{"item_id": "40785", "gold": true, "pred": true, "claims": ["The world is going to pass the point of no return on climate within the next eight to 10 years."], "sdk_version": "0.2.179"}
+{"item_id": "40789", "gold": false, "pred": true, "claims": ["The proposal will create millions of new, good-paying jobs."], "sdk_version": "0.2.179"}
+{"item_id": "40797", "gold": true, "pred": true, "claims": ["The speaker's plan will create $1 trillion more in economic growth than his opponent's proposal."], "sdk_version": "0.2.179"}
+{"item_id": "40800", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40974", "gold": false, "pred": true, "claims": ["A clean energy economy would create millions of new jobs."], "sdk_version": "0.2.179"}
+{"item_id": "41038", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41042", "gold": false, "pred": true, "claims": ["Congress spends trillions of dollars."], "sdk_version": "0.2.179"}
+{"item_id": "41044", "gold": false, "pred": true, "claims": ["Gas prices need to be lowered."], "sdk_version": "0.2.179"}
+{"item_id": "41045", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41058", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41074", "gold": true, "pred": true, "claims": ["The unemployment rate was over 10 percent when the speaker became governor in 2010."], "sdk_version": "0.2.179"}
+{"item_id": "41109", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41122", "gold": false, "pred": true, "claims": ["The speaker has gone on to found multibillion dollar companies."], "sdk_version": "0.2.179"}
+{"item_id": "41123", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41136", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41169", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41193", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41205", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41238", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40806", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40828", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40833", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40839", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40842", "gold": true, "pred": true, "claims": ["Emissions produced in manufacturing the massive windmills exceed anything associated with natural gas.", "Natural gas is very clean."], "sdk_version": "0.2.179"}
+{"item_id": "40847", "gold": false, "pred": true, "claims": ["Wind and solar power are not yet powerful enough to run large factories."], "sdk_version": "0.2.179"}
+{"item_id": "40849", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40850", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40919", "gold": true, "pred": true, "claims": ["The government gives subsidies or funding to solar and wind energy."], "sdk_version": "0.2.179"}
+{"item_id": "40926", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40948", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40952", "gold": false, "pred": true, "claims": ["The other side wanted to get together (with the speaker, after calls from people not normally calling)."], "sdk_version": "0.2.179"}
+{"item_id": "40969", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40970", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "40973", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41247", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41268", "gold": true, "pred": true, "claims": ["Solar panels are produced in a plant in China powered by coal."], "sdk_version": "0.2.179"}
+{"item_id": "41276", "gold": true, "pred": true, "claims": ["Arkansas has 14 percent fewer state employees after the speaker left government than when the speaker took over as governor eight years earlier."], "sdk_version": "0.2.179"}
+{"item_id": "41278", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41281", "gold": false, "pred": true, "claims": ["The speaker has served as a federal prosecutor."], "sdk_version": "0.2.179"}
+{"item_id": "41313", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41320", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41353", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41358", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41376", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41416", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41432", "gold": false, "pred": true, "claims": ["A woman in Florida named Penny survived multiple abortion attempts."], "sdk_version": "0.2.179"}
+{"item_id": "41440", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41441", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41458", "gold": true, "pred": true, "claims": ["The cause of life (opposition to abortion) is supported by 70 percent of the American people."], "sdk_version": "0.2.179"}
+{"item_id": "41647", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41658", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41665", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41687", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41703", "gold": true, "pred": true, "claims": ["The party in power has used police force to indict its political opponents."], "sdk_version": "0.2.179"}
+{"item_id": "41760", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41778", "gold": true, "pred": true, "claims": ["Seventeen percent of Republicans have confidence in the Department of Justice."], "sdk_version": "0.2.179"}
+{"item_id": "41784", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41798", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41800", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41817", "gold": true, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41841", "gold": true, "pred": true, "claims": ["Conservative legal scholars say the candidate may be disqualified under the 14th Amendment from being President as a result of the January 6 insurrection."], "sdk_version": "0.2.179"}
+{"item_id": "41848", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41852", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41861", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41469", "gold": true, "pred": true, "claims": ["The U.S. Senate has not had 45 pro-life senators in over 100 years."], "sdk_version": "0.2.179"}
+{"item_id": "41470", "gold": true, "pred": true, "claims": ["A U.S. president cannot ban abortions nationwide by executive action."], "sdk_version": "0.2.179"}
+{"item_id": "41490", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41526", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41529", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41567", "gold": false, "pred": true, "claims": ["Violence is claiming innocent lives every week in every major city in the United States."], "sdk_version": "0.2.179"}
+{"item_id": "41569", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41576", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41588", "gold": false, "pred": true, "claims": ["There are 93 U.S. attorneys in the United States."], "sdk_version": "0.2.179"}
+{"item_id": "41590", "gold": true, "pred": true, "claims": ["Hunter Biden filled out a false application for a gun permit.", "Hunter Biden was facing a 10-year mandatory minimum sentence for the gun charge.", "The 10-year mandatory minimum was mandated by legislation sponsored by Joe Biden.", "The Justice Department dropped the charges against Hunter Biden."], "sdk_version": "0.2.179"}
+{"item_id": "41595", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41600", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41616", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41617", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41619", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41862", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41864", "gold": true, "pred": true, "claims": ["Three quarters of Americans do not want a rematch between Trump and Biden."], "sdk_version": "0.2.179"}
+{"item_id": "41866", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41894", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41899", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41907", "gold": false, "pred": true, "claims": ["If I'm president in the United States, we'll get fair consideration of any pardon request."], "sdk_version": "0.2.179"}
+{"item_id": "41913", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41936", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41948", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41956", "gold": false, "pred": true, "claims": ["The speaker went to Ukraine to see for themselves what Vladimir Putin's army was doing to Ukrainian people."], "sdk_version": "0.2.179"}
+{"item_id": "41960", "gold": true, "pred": true, "claims": ["Russian forces gouged out people's eyes, cut off their ears, and shot people in the back of the head in Ukraine.", "Russian soldiers raped daughters and wives in homes in Ukraine, leaving widows and orphans."], "sdk_version": "0.2.179"}
+{"item_id": "41974", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41975", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41989", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "41995", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42232", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42307", "gold": false, "pred": true, "claims": ["Every immigrant, including the speaker's mother, had to pass a civics test to become a U.S. citizen."], "sdk_version": "0.2.179"}
+{"item_id": "42309", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42332", "gold": false, "pred": true, "claims": ["Education is one of the biggest parts of a state budget."], "sdk_version": "0.2.179"}
+{"item_id": "42335", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42341", "gold": false, "pred": true, "claims": ["The speaker recently held the seventh annual Governors Conference on Innovation and Education."], "sdk_version": "0.2.179"}
+{"item_id": "42349", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42355", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42356", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42399", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42408", "gold": true, "pred": true, "claims": ["The speaker built computer science education (as governor, in their state)."], "sdk_version": "0.2.179"}
+{"item_id": "42426", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42467", "gold": true, "pred": true, "claims": ["Cities are less safe because of fentanyl pouring into the United States.", "Biden's energy policies are raising the cost of every product Americans buy, not just gasoline."], "sdk_version": "0.2.179"}
+{"item_id": "42473", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42489", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42020", "gold": false, "pred": true, "claims": ["The same people led the United States into both the Iraq War and the Vietnam War."], "sdk_version": "0.2.179"}
+{"item_id": "42025", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42054", "gold": false, "pred": true, "claims": ["While the speaker was at the United Nations, the Russian ambassador suddenly died."], "sdk_version": "0.2.179"}
+{"item_id": "42074", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42090", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42091", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42093", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42118", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42122", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42134", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42141", "gold": false, "pred": true, "claims": ["The Biden administration sent Secretary of State Antony Blinken and Treasury Secretary Janet Yellen to China."], "sdk_version": "0.2.179"}
+{"item_id": "42144", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42168", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42202", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42228", "gold": false, "pred": true, "claims": ["The speaker has met Angel Moms throughout the United States."], "sdk_version": "0.2.179"}
+{"item_id": "42492", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42532", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42534", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42536", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42541", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42545", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42558", "gold": false, "pred": true, "claims": ["The common set of ideals bounding Americans set the United States into motion in 1776."], "sdk_version": "0.2.179"}
+{"item_id": "42569", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42571", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42580", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}
+{"item_id": "42585", "gold": false, "pred": false, "claims": [], "sdk_version": "0.2.179"}

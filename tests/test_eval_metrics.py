@@ -61,3 +61,37 @@ def test_datasets_and_policies():
     fb = factcheck_blocked_policy()
     assert fb.check("https://www.politifact.com/x") and fb.check("https://web.archive.org/web/1/https://fullfact.org/a")
     assert fb.check("https://example-news.com/fact-check/foo") and fb.check("https://www.who.int/") is None
+
+
+def test_vectorised_metrics_match_sklearn_and_loops():
+    import numpy as np
+    from sklearn.metrics import f1_score
+
+    from factcheck.models import LABELS
+    rng = np.random.default_rng(1)
+    gold = list(rng.choice(LABELS, 200, p=[.25, .6, .08, .07]))
+    pred = list(rng.choice([*LABELS, "NONE"], 200))
+    (g, p), classes = m._encode(gold, pred)
+    assert m._macro_f1_rows(g[None], p[None], classes)[0] == pytest.approx(
+        f1_score(gold, pred, labels=list(LABELS), average="macro", zero_division=0))
+    # bootstrap CI from the vectorised path equals an explicit loop with the same indices
+    idx = np.random.default_rng(0).integers(0, 200, (500, 200))
+    loop = [m.macro_f1(list(np.array(gold)[i]), list(np.array(pred)[i])) for i in idx]
+    assert m.bootstrap_ci(m.macro_f1, gold, pred, n_boot=500) == pytest.approx(
+        [float(np.percentile(loop, 2.5)), float(np.percentile(loop, 97.5))])
+
+
+def test_permutation_f1_detects_clear_difference():
+    import numpy as np
+    gold = np.array([1, 0] * 100, bool)
+    good, bad = gold.copy(), np.zeros(200, bool)
+    assert m.permutation_f1(gold, good, bad, n=2000) < 0.01
+    assert m.permutation_f1(gold, good, good, n=2000) == pytest.approx(1.0)
+
+
+def test_ece_does_not_depend_on_row_order_with_ties():
+    import numpy as np
+    conf = np.array([0.85] * 6 + [0.6] * 4)
+    corr = np.array([1, 0, 1, 1, 0, 1, 1, 0, 0, 1])
+    perm = np.random.default_rng(3).permutation(10)
+    assert m.ece_equal_mass(conf, corr) == pytest.approx(m.ece_equal_mass(conf[perm], corr[perm]))

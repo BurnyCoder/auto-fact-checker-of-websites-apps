@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fact-check results explorer</title>
+<meta name="description" content="Benchmark results of a Claude Haiku fact-checking agent: retrieval vs memory, leakage controls, OCR channel, check-worthiness, calibration, per-claim verdicts.">
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb; --surface-2: #f2f1ee; --text: #0b0b0b; --text-2: #52514e; --muted: #8a8984; --grid: #e6e5e1;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+    --ok: #2e9d4f; --bad: #d93025; --warn: #b07800; --nee: #80868b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19; --surface-2: #242423; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88; --grid: #383836;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ok: #43b864; --bad: #ef6b60; --warn: #d9a520; --nee: #9aa0a6;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface: #1a1a19; --surface-2: #242423; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8e88; --grid: #383836;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ok: #43b864; --bad: #ef6b60; --warn: #d9a520; --nee: #9aa0a6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface); color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 36px 0 8px; } h3 { font-size: 15px; margin: 18px 0 6px; }
+  p { color: var(--text-2); max-width: 760px; } a { color: var(--s1); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+  .card { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; }
+  .card .k { font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+  .card .v { font-size: 22px; font-weight: 650; margin: 2px 0; font-variant-numeric: tabular-nums; }
+  .card .d { font-size: 13px; color: var(--text-2); }
+  .chart { position: relative; background: var(--surface-2); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  svg text { fill: var(--text-2); font-size: 11px; }
+  .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--surface); padding: 6px 8px; border-radius: 6px;
+         font-size: 12px; opacity: 0; transition: opacity .1s; white-space: nowrap; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-2); margin: 6px 0 0; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; vertical-align: top; }
+  th { color: var(--text-2); font-weight: 600; }
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+  select, input { font: inherit; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--grid); background: var(--surface); color: var(--text); }
+  input[type=search] { min-width: 220px; flex: 1; }
+  .pill { display: inline-block; border-radius: 999px; padding: 0 8px; font-size: 12px; font-weight: 600; color: #fff; }
+  .claim { border-bottom: 1px solid var(--grid); padding: 10px 0; }
+  .claim summary { cursor: pointer; list-style: none; }
+  .claim summary::-webkit-details-marker { display: none; }
+  .arms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }
+  .arm { background: var(--surface-2); border-radius: 8px; padding: 10px; font-size: 13px; }
+  .arm h4 { margin: 0 0 4px; font-size: 13px; }
+  .mut { color: var(--text-2); font-size: 12px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .tabs { display: flex; gap: 6px; } .tabs button { font: inherit; border: 1px solid var(--grid); background: var(--surface); color: var(--text); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  .tabs button[aria-pressed=true] { background: var(--text); color: var(--surface); }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Fact-checking what you see — benchmark results</h1>
+  <p>A Claude Haiku 5.5 agent (web search, page fetch, raw-data downloads, sandboxed bash) checks claims and returns one
+    of four <a href="https://arxiv.org/abs/2305.13117">AVeriTeC</a> labels with a confidence score. This page shows the
+    <a href="https://github.com/BurnyCoder/fact-check-websites-apps/blob/main/reports/preregistration.md">preregistered</a> evaluation.
+    Every number is computed by <code>eval/report.py</code> from the per-claim result files in the
+    <a href="https://github.com/BurnyCoder/fact-check-websites-apps">repository</a>.</p>
+  <div class="cards" id="cards"></div>
+
+  <h2>H1 / H2 — retrieval vs memory, and the value of existing fact-checks</h2>
+  <p id="h12text"></p>
+  <div class="chart" id="accChart"></div>
+  <h3>Per-condition metrics</h3>
+  <div id="armTable"></div>
+
+  <h2>Calibration of the stated confidence</h2>
+  <p>If the agent says 80 %, is it right 80 % of the time? Points on the dashed diagonal are perfectly calibrated.</p>
+  <div class="chart" id="calChart"></div>
+
+  <h2>H3 — does reading the claim through OCR cost accuracy?</h2>
+  <p id="h3text"></p>
+  <div class="chart" id="h3Chart"></div>
+
+  <h2>H4 — finding check-worthy sentences</h2>
+  <p id="h4text"></p>
+  <div class="chart" id="h4Chart"></div>
+
+  <h2>Every claim, every verdict</h2>
+  <p>Browse the 120 preregistered AVeriTeC dev claims. Expand a claim to read each condition's verdict, confidence
+    reasoning, correction and sources (✓ quote found on the page, ✗ not found, ? not checked).</p>
+  <div class="filters">
+    <input type="search" id="q" placeholder="Search claims…" aria-label="Search claims">
+    <select id="fGold" aria-label="Gold label"><option value="">All gold labels</option></select>
+    <select id="fArm" aria-label="Condition"><option value="web_default">Web, default</option><option value="web_blocked">Web, fact-checks blocked</option><option value="closed_book">Closed-book</option></select>
+    <select id="fOk" aria-label="Correctness"><option value="">Right and wrong</option><option value="1">Right</option><option value="0">Wrong</option></select>
+    <span class="mut" id="count"></span>
+  </div>
+  <div id="claims"></div>
+  <footer>Libor “Burny” Burian · data: AVeriTeC (CC-BY-NC-4.0), CLEF CheckThat! 2024 · generated from <code>results/</code></footer>
+</main>
+<script>
+const ARM = { closed_book: "Closed-book (no web)", web_blocked: "Web, fact-check sites blocked", web_default: "Web, default (product)" };
+const ARMCOL = { closed_book: "var(--s1)", web_blocked: "var(--s2)", web_default: "var(--s3)" };
+const LABCOL = { "Supported": "var(--ok)", "Refuted": "var(--bad)", "Not Enough Evidence": "var(--nee)", "Conflicting Evidence/Cherrypicking": "var(--warn)" };
+const pct = (x, d = 1) => x == null || isNaN(x) ? "–" : `${(100 * x).toFixed(d)} %`;
+const el = (tag, attrs = {}, text) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+const svgEl = (tag, attrs = {}) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+
+function tooltip(chart) {
+  const tip = el("div", { class: "tip" }); chart.append(tip);
+  return { show(e, html) { tip.textContent = html; const r = chart.getBoundingClientRect(); tip.style.left = `${Math.min(e.clientX - r.left + 12, r.width - 200)}px`; tip.style.top = `${e.clientY - r.top - 30}px`; tip.style.opacity = 1; },
+           hide() { tip.style.opacity = 0; } };
+}
+
+// Bar chart with CI whiskers: items [{label, value, lo, hi, color, note}]
+function bars(container, items, { ylabel = "", refs = [] } = {}) {
+  const W = 980, H = 260, L = 46, B = 46, T = 14;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", "aria-label": ylabel });
+  const y = v => T + (H - T - B) * (1 - v);
+  for (const t of [0, .25, .5, .75, 1]) {
+    svg.append(svgEl("line", { x1: L, x2: W - 8, y1: y(t), y2: y(t), stroke: "var(--grid)" }));
+    const lab = svgEl("text", { x: L - 6, y: y(t) + 4, "text-anchor": "end" }); lab.textContent = `${t * 100}%`; svg.append(lab);
+  }
+  const bw = Math.min(120, (W - L - 20) / items.length * 0.55), step = (W - L - 20) / items.length;
+  const tip = tooltip(container);
+  items.forEach((it, i) => {
+    const cx = L + step * (i + .5);
+    const r = svgEl("rect", { x: cx - bw / 2, y: y(it.value), width: bw, height: y(0) - y(it.value), rx: 4, fill: it.color });
+    const hit = svgEl("rect", { x: cx - step / 2, y: T, width: step, height: H - T - B, fill: "transparent" });
+    hit.addEventListener("mousemove", e => tip.show(e, `${it.label}: ${pct(it.value)}${it.lo != null ? ` [${pct(it.lo)}, ${pct(it.hi)}]` : ""}${it.note ? " · " + it.note : ""}`));
+    hit.addEventListener("mouseleave", () => tip.hide());
+    svg.append(r);
+    if (it.lo != null) {
+      svg.append(svgEl("line", { x1: cx, x2: cx, y1: y(it.lo), y2: y(it.hi), stroke: "var(--text)", "stroke-width": 1.2 }));
+      for (const v of [it.lo, it.hi]) svg.append(svgEl("line", { x1: cx - 6, x2: cx + 6, y1: y(v), y2: y(v), stroke: "var(--text)", "stroke-width": 1.2 }));
+    }
+    const val = svgEl("text", { x: cx, y: y(it.hi ?? it.value) - 6, "text-anchor": "middle", style: "fill:var(--text)" }); val.textContent = pct(it.value, 0); svg.append(val);
+    const lab = svgEl("text", { x: cx, y: H - B + 18, "text-anchor": "middle" }); lab.textContent = it.label; svg.append(lab);
+    svg.append(hit);
+  });
+  for (const ref of refs) {
+    svg.append(svgEl("line", { x1: L, x2: W - 8, y1: y(ref.value), y2: y(ref.value), stroke: "var(--muted)", "stroke-dasharray": "4 4" }));
+    const t = svgEl("text", { x: W - 10, y: y(ref.value) - 4, "text-anchor": "end" }); t.textContent = `${ref.label} ${pct(ref.value, 0)}`; svg.append(t);
+  }
+  container.append(svg);
+}
+
+function lines(container, series) {               // reliability diagram: series [{label, color, points:[{x,y,n}]}]
+  const W = 980, H = 300, L = 46, B = 40, T = 12, R = 16;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", "aria-label": "Reliability diagram" });
+  const x = v => L + (W - L - R) * v, y = v => T + (H - T - B) * (1 - v);
+  for (const t of [0, .25, .5, .75, 1]) {
+    svg.append(svgEl("line", { x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: "var(--grid)" }));
+    const a = svgEl("text", { x: L - 6, y: y(t) + 4, "text-anchor": "end" }); a.textContent = `${t * 100}%`; svg.append(a);
+    const b = svgEl("text", { x: x(t), y: H - B + 16, "text-anchor": "middle" }); b.textContent = `${t * 100}%`; svg.append(b);
+  }
+  const xl = svgEl("text", { x: (L + W) / 2, y: H - 6, "text-anchor": "middle" }); xl.textContent = "stated confidence (bin mean)"; svg.append(xl);
+  svg.append(svgEl("line", { x1: x(0), y1: y(0), x2: x(1), y2: y(1), stroke: "var(--muted)", "stroke-dasharray": "4 4" }));
+  const tip = tooltip(container);
+  for (const s of series) {
+    svg.append(svgEl("polyline", { points: s.points.map(p => `${x(p.x)},${y(p.y)}`).join(" "), fill: "none", stroke: s.color, "stroke-width": 2 }));
+    for (const p of s.points) {
+      const c = svgEl("circle", { cx: x(p.x), cy: y(p.y), r: 5, fill: s.color, stroke: "var(--surface-2)", "stroke-width": 2 });
+      c.addEventListener("mousemove", e => tip.show(e, `${s.label}: said ${pct(p.x, 0)}, right ${pct(p.y, 0)} (n=${p.n})`));
+      c.addEventListener("mouseleave", () => tip.hide());
+      svg.append(c);
+    }
+  }
+  container.append(svg);
+  const lg = el("div", { class: "legend" });
+  for (const s of series) { const it = el("span"); const sw = el("i"); sw.style.background = s.color; it.append(sw, document.createTextNode(s.label)); lg.append(it); }
+  container.append(lg);
+}
+
+function card(k, v, d) { const c = el("div", { class: "card" }); c.append(el("div", { class: "k" }, k), el("div", { class: "v" }, v), el("div", { class: "d" }, d)); return c; }
+
+function verdictBlock(armKey, a) {
+  const box = el("div", { class: "arm" });
+  const h = el("h4"); const p = el("span", { class: "pill" }, a.pred || "no verdict"); p.style.background = LABCOL[a.pred] || "var(--muted)";
+  h.append(document.createTextNode(`${ARM[armKey]} `), p, document.createTextNode(` ${pct(a.confidence, 0)} `));
+  h.append(el("span", { class: a.correct ? "ok" : "bad" }, a.correct ? "✓ right" : "✗ wrong"));
+  box.append(h);
+  if (a.reasoning) box.append(el("div", { class: "mut" }, `Why this confidence: ${a.reasoning}`));
+  if (a.explanation) box.append(el("div", {}, a.explanation));
+  if (a.correction) { const c = el("div"); c.append(el("b", {}, "Correction: "), document.createTextNode(a.correction)); box.append(c); }
+  for (const s of a.sources || []) {
+    const row = el("div", { class: "mut" });
+    const mark = s.quote_verified === true ? "✓" : s.quote_verified === false ? "✗" : "?";
+    let href = null; try { const u = new URL(s.url); if (/^https?:$/.test(u.protocol)) href = u.href; } catch {}
+    const link = el(href ? "a" : "span", href ? { href, target: "_blank", rel: "noopener noreferrer" } : {}, s.title || s.url);
+    row.append(document.createTextNode(`${mark} `), link, document.createTextNode(` (${s.supports})`));
+    box.append(row);
+  }
+  if (a.computations?.length) box.append(el("div", { class: "mut" }, `computed: ${a.computations.join(" ; ")}`));
+  return box;
+}
+
+async function main() {
+  const [S, C] = await Promise.all([fetch("data/summary.json").then(r => r.json()), fetch("data/claims.json").then(r => r.json())]);
+  const conf = S.confirmatory || {};
+  const arms = conf.arms || {};
+  const cards = document.getElementById("cards");
+  if (conf.H1) cards.append(card("H1 retrieval (blocked web − closed-book)", `${conf.H1.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H1.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H1.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H1.accuracy_diff.ci95[1]).toFixed(1)}], p = ${conf.H1.mcnemar.p_one_sided.toFixed(3)} (one-sided)`));
+  if (conf.H2) cards.append(card("H2 fact-check access (default − blocked)", `${conf.H2.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H2.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H2.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H2.accuracy_diff.ci95[1]).toFixed(1)}], p = ${conf.H2.mcnemar.p_one_sided.toFixed(3)} (one-sided)`));
+  if (S.h3) cards.append(card("H3 OCR − clean text", `${S.h3.diff.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * S.h3.diff.accuracy_diff.diff).toFixed(1)} pts`, `one-sided 95 % lower bound ${(100 * S.h3.diff.accuracy_diff.lower_one_sided_95).toFixed(1)} pts (margin −3)`));
+  if (S.h4) cards.append(card("H4 check-worthiness F1", S.h4.f1.toFixed(2), `best baseline (${S.h4.best_baseline}) ${Math.max(S.h4.baseline_all_positive_f1, S.h4.baseline_heuristic_f1).toFixed(2)}, p = ${S.h4.permutation_p_vs_best.toFixed(4)}`));
+  document.getElementById("h12text").textContent = conf.H1 ? `Accuracy on ${arms.closed_book?.n ?? "?"} preregistered AVeriTeC dev claims (label-stratified). Whiskers: 95 % bootstrap intervals. Dashed line: always predicting the majority label (Refuted).` : "Confirmatory results not available yet.";
+  bars(document.getElementById("accChart"), Object.entries(arms).map(([k, a]) => ({ label: ARM[k], value: a.accuracy, lo: a.accuracy_ci95[0], hi: a.accuracy_ci95[1], color: ARMCOL[k], note: `n=${a.n}` })),
+       { ylabel: "Accuracy", refs: conf.baseline_majority_accuracy ? [{ label: "majority class", value: conf.baseline_majority_accuracy }] : [] });
+  const t = el("table"); const thead = el("thead"); const hr = el("tr");
+  for (const hname of ["Condition", "Accuracy", "Macro-F1", "Brier", "ECE", "$/claim", "Quotes verified (of checked)"]) hr.append(el("th", {}, hname));
+  thead.append(hr); t.append(thead); const tb = el("tbody");
+  for (const [k, a] of Object.entries(arms)) {
+    const tr = el("tr");
+    for (const v of [ARM[k], pct(a.accuracy), pct(a.macro_f1), a.brier.toFixed(3), a.ece.toFixed(3), `$${a.cost_per_claim_usd.toFixed(4)}`, k === "closed_book" ? "–" : pct(a.quote_verified_rate_of_checked)]) tr.append(el("td", {}, v));
+    tb.append(tr);
+  }
+  t.append(tb); document.getElementById("armTable").append(t);
+  lines(document.getElementById("calChart"), Object.entries(arms).map(([k, a]) => ({ label: `${ARM[k]} (ECE ${a.ece.toFixed(2)})`, color: ARMCOL[k], points: a.reliability.map(b => ({ x: b.mean_conf, y: b.accuracy, n: b.n })) })));
+  if (S.h3) {
+    document.getElementById("h3text").textContent = `All 500 dev claims rendered in a generic chat or article layout (13/15/18 px), read back by Windows OCR, then extracted and verified (closed-book). Mean character error rate of the OCR'd claim: ${pct(S.h3.arms.h3_ocr.cer_mean, 2)}.`;
+    bars(document.getElementById("h3Chart"), [
+      { label: "Clean text", value: S.h3.arms.h3_clean.accuracy, color: "var(--s1)" },
+      ...Object.entries(S.h3.by_cell).map(([cell, v]) => ({ label: `OCR ${cell}`, value: v.accuracy, color: "var(--s2)", note: `n=${v.n}, CER ${pct(v.cer_mean, 2)}` })),
+    ], { ylabel: "Accuracy" });
+  }
+  if (S.h4) {
+    document.getElementById("h4text").textContent = `CheckThat! 2024 Task 1 English test (${S.h4.n} debate sentences, ${pct(S.h4.positive_rate, 0)} check-worthy). A sentence counts as check-worthy if the product extractor returns a claim from it.`;
+    bars(document.getElementById("h4Chart"), [
+      { label: "Product extractor", value: S.h4.f1, lo: S.h4.f1_ci95[0], hi: S.h4.f1_ci95[1], color: "var(--s1)" },
+      { label: "Number/quantity heuristic", value: S.h4.baseline_heuristic_f1, color: "var(--muted)" },
+      { label: "All positive", value: S.h4.baseline_all_positive_f1, color: "var(--muted)" },
+      { label: "Random (stratified)", value: S.h4.baseline_random_f1_mean, lo: S.h4.baseline_random_f1_ci95[0], hi: S.h4.baseline_random_f1_ci95[1], color: "var(--muted)" },
+    ], { ylabel: "F1" });
+  }
+  // claim browser
+  const gold = document.getElementById("fGold");
+  for (const g of [...new Set(C.map(c => c.gold))].sort()) gold.add(new Option(g, g));
+  const render = () => {
+    const q = document.getElementById("q").value.toLowerCase(), g = gold.value, arm = document.getElementById("fArm").value, ok = document.getElementById("fOk").value;
+    const list = C.filter(c => (!q || c.claim.toLowerCase().includes(q)) && (!g || c.gold === g) && (!ok || String(+!!c.arms[arm]?.correct) === ok));
+    document.getElementById("count").textContent = `${list.length} of ${C.length}`;
+    const box = document.getElementById("claims"); box.replaceChildren();
+    for (const c of list.slice(0, 200)) {
+      const d = el("details", { class: "claim" }); const s = el("summary");
+      const p = el("span", { class: "pill" }, c.gold); p.style.background = LABCOL[c.gold];
+      s.append(p, document.createTextNode(` ${c.claim} `), el("span", { class: "mut" }, `${c.speaker ? c.speaker + " · " : ""}${c.date || ""}`));
+      d.append(s);
+      d.addEventListener("toggle", () => { if (d.open && !d.querySelector(".arms")) { const a = el("div", { class: "arms" }); for (const k of ["closed_book", "web_blocked", "web_default"]) if (c.arms[k]) a.append(verdictBlock(k, c.arms[k])); d.append(a); } });
+      box.append(d);
+    }
+  };
+  for (const id of ["q", "fGold", "fArm", "fOk"]) document.getElementById(id).addEventListener("input", render);
+  render();
+}
+main().catch(e => { document.getElementById("cards").textContent = `Could not load results: ${e.message}`; });
+</script>
+</body>
+</html>
