@@ -75,4 +75,65 @@ async def test_cancel_source_skips_queued_work(settings):
     gate.set()
     await asyncio.sleep(0.3)
     assert not [e for e in events if e["type"] == "verdict"]  # running ones cancelled, queued ones skipped
+    assert all(c.status == "pending" for c in svc.claims.values())   # recoverable via "click to check"
+    first = next(iter(svc.claims))
+    assert svc.check(first)
+    await wait_for(events, "verdict", 1)
+    await svc.stop()
+
+
+def slowed(svc, gate: asyncio.Event):
+    original = svc.runner.run
+
+    async def slow_run(prompt, **kw):
+        if kw.get("kind") == "verify":
+            await gate.wait()
+        return await original(prompt, **kw)
+
+    svc.runner.run = slow_run
+
+
+async def test_stop_returns_while_a_verification_is_running(settings):
+    svc, _ = await make_service(settings, cache=False)
+    slowed(svc, asyncio.Event())
+    await svc.submit(SourceInfo(kind="chrome", source_id="t"), [TextBlock(id="b", text="The tower is 330 m tall.")])
+    await asyncio.sleep(0.2)
+    async with asyncio.timeout(5):                        # used to hang forever (code-review finding #3)
+        await svc.stop()
+
+
+async def test_crashing_verification_does_not_kill_workers(settings):
+    svc, events = await make_service(settings, cache=False)
+    calls = {"n": 0}
+    original = svc.runner.run
+
+    async def flaky(prompt, **kw):
+        if kw.get("kind") == "verify":
+            calls["n"] += 1
+            if calls["n"] <= 3:
+                raise ValueError("Invalid IPv6 URL")      # e.g. a bracketed IPv6 URL in a search result
+        return await original(prompt, **kw)
+
+    svc.runner.run = flaky
+    await svc.submit(SourceInfo(kind="chrome", source_id="t"), [TextBlock(id="b", text=TEXT)])
+    async with asyncio.timeout(10):
+        while sum(c.status == "error" for c in svc.claims.values()) < 3:
+            await asyncio.sleep(0.05)
+    pending = next(c for c in svc.claims.values() if c.status == "pending")
+    assert svc.check(pending.id)                          # workers survived: the 4th claim still gets verified
+    await wait_for(events, "verdict", 1)
+    await svc.stop()
+
+
+async def test_resubmitting_does_not_verify_twice(settings):
+    svc, events = await make_service(settings, cache=False)
+    gate = asyncio.Event()
+    slowed(svc, gate)
+    src = SourceInfo(kind="desktop", source_id="screen:1")
+    await svc.submit(src, [TextBlock(id="b", text="The tower is 330 m tall.")], force=True)
+    await svc.submit(src, [TextBlock(id="b", text="The tower is 330 m tall.")], force=True)
+    gate.set()
+    await wait_for(events, "verdict", 1)
+    await asyncio.sleep(0.3)
+    assert sum(e["type"] == "verdict" for e in events) == 1
     await svc.stop()
