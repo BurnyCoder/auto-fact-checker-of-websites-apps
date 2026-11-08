@@ -11,10 +11,10 @@ from __future__ import annotations
 import re
 import shutil
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
-from typing import Iterator
 
 
 def to_wsl_path(path: Path) -> str:

@@ -65,7 +65,7 @@ def trim(text: str, limit: int) -> str:
 @functools.lru_cache(maxsize=1)
 def wsl_home() -> str:
     """The WSL user's home directory, asked once from WSL itself (e.g. /home/burny)."""
-    out = subprocess.run(["wsl.exe", "-e", "sh", "-c", "printf %s \"$HOME\""], capture_output=True, timeout=30)
+    out = subprocess.run(["wsl.exe", "-e", "sh", "-c", "printf %s \"$HOME\""], capture_output=True, timeout=30, check=False)
     return out.stdout.decode("utf-8").strip()
 
 
@@ -127,7 +127,7 @@ def sandbox_available() -> tuple[bool, str]:
         tools = resolve_tools_dir(SandboxConfig())
         probe = subprocess.run(
             ["wsl.exe", "-e", "sh", "-c", f"command -v bwrap && test -x '{tools}/venv/bin/python' && echo ok"],
-            capture_output=True, timeout=30,
+            capture_output=True, timeout=30, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"WSL probe failed: {exc}"
@@ -136,7 +136,10 @@ def sandbox_available() -> tuple[bool, str]:
     return True, "ok"
 
 
-async def run_bash(script: str, ws: Workspace, cfg: SandboxConfig = SandboxConfig()) -> SandboxResult:
+DEFAULT_SANDBOX = SandboxConfig()
+
+
+async def run_bash(script: str, ws: Workspace, cfg: SandboxConfig = DEFAULT_SANDBOX) -> SandboxResult:
     """Run `script` with bash inside the sandbox, with `ws` mounted at /work.
 
     The outer asyncio timeout (limit + 20 s) is only a backstop for a hung wsl.exe; the inner
