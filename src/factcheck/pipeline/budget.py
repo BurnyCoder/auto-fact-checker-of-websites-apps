@@ -11,7 +11,9 @@ Billing is to the user's subscription when possible, so dollars here are API-equ
 from __future__ import annotations
 
 import json
+import sys
 import threading
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,35 @@ WEB_SEARCH_USD = 0.01        # $10 per 1,000 searches (same pricing page)
 
 class BudgetExceeded(RuntimeError):
     """Raised before a call that could push spending over a cap."""
+
+
+@contextmanager
+def file_lock(path: Path):
+    """Cross-process exclusive lock on `<path>.lock` (msvcrt on Windows, fcntl elsewhere).
+
+    Needed because several processes (app, eval runs) append to the same ledger: on 2026-11-08 three concurrent
+    eval processes interleaved their appends and corrupted one line (repaired from the LLM logs). msvcrt.locking
+    with LK_LOCK retries for ~10 s before raising (https://docs.python.org/3/library/msvcrt.html#msvcrt.locking)."""
+    lock_path = path.with_name(path.name + ".lock")
+    with open(lock_path, "a+") as fh:
+        if sys.platform == "win32":
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
 def estimate_cost(model: str, usage: dict[str, Any] | None) -> float:
@@ -62,8 +93,8 @@ class BudgetLedger:
     def _rows(self) -> list[dict[str, Any]]:
         if not self.path.exists():
             return []
-        with self.path.open(encoding="utf-8") as fh:
-            return [json.loads(line) for line in fh if line.strip()]
+        with file_lock(self.path), self.path.open(encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]   # a corrupt line raises: fail safe, stop spending
 
     def spent_total(self) -> float:
         return round(sum(r["cost_usd"] for r in self._rows()), 6)
@@ -82,7 +113,7 @@ class BudgetLedger:
                 raise BudgetExceeded(f"total budget ${self.total_cap:.2f} would be exceeded "
                                      f"(spent ${self.spent_total():.4f}, in flight ${self._reserved:.4f})")
             if (purpose.startswith("app") and self.daily_app_cap is not None
-                    and self.spent_today_app() + worst_case_usd > self.daily_app_cap):
+                    and self.spent_today_app() + self._reserved + worst_case_usd > self.daily_app_cap):
                 raise BudgetExceeded(f"daily app budget ${self.daily_app_cap:.2f} reached")
             self._reserved += worst_case_usd
 
@@ -115,6 +146,6 @@ class BudgetLedger:
             "web_searches": ((usage or {}).get("server_tool_use") or {}).get("web_search_requests"),
             **(extra or {}),
         }
-        with self._lock, self.path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row) + "\n")
+        with self._lock, file_lock(self.path), self.path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(row) + "\n")                       # one locked write per row: no cross-process interleaving
         return cost
