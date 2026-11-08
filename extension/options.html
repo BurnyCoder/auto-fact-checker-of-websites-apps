@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fact Check — Options</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 560px; margin: 24px; color: #202124; }
+    label { display: block; margin-top: 14px; font-weight: 600; }
+    input[type=text], input[type=password] { width: 100%; padding: 6px 8px; box-sizing: border-box; }
+    .hint { color: #5f6368; font-size: 12px; font-weight: 400; }
+    button { margin-top: 18px; padding: 6px 14px; }
+    #status { margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>Fact Check What You See</h2>
+  <label>Local app WebSocket URL
+    <input id="serverUrl" type="text">
+    <span class="hint">Default ws://127.0.0.1:8765/ws (the desktop app's SERVER_PORT).</span>
+  </label>
+  <label>Extension token
+    <input id="token" type="password" autocomplete="off">
+    <span class="hint">Copy it from the desktop app's tray menu ("Copy extension token"). It only lets this extension
+      talk to your local app; it is not an Anthropic key.</span>
+  </label>
+  <label><input id="autoMode" type="checkbox"> Check pages automatically while I read
+    <span class="hint">Off: only the keyboard shortcut (Alt+Shift+F), the popup button or the right-click menu start a check.</span>
+  </label>
+  <button id="save">Save</button>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>

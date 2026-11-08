@@ -1,0 +1,320 @@
+// content.js — runs in every http(s) page.
+//
+// Local context: collects visible text blocks, sends new ones to the service worker, and underlines the
+// returned claims with the CSS Custom Highlight API (no DOM edits:
+// https://developer.mozilla.org/en-US/docs/Web/API/CSS_Custom_Highlight_API). Hovering a claim shows a
+// card with the verdict, confidence + reasoning, explanation, correction, sources and computations.
+// Global context: talks only to service_worker.js through a runtime Port. All page/model text is written
+// with textContent (never innerHTML), and only http(s) links are rendered, so a malicious page or verdict
+// cannot inject markup into the card.
+(() => {
+  if (window.__factcheckLoaded) return;          // guard against double injection
+  window.__factcheckLoaded = true;
+
+  const DOC_ID = Math.random().toString(36).slice(2, 10);   // new source id per page load
+  const LABEL_HL = {
+    "Supported": "fc-supported", "Refuted": "fc-refuted", "Not Enough Evidence": "fc-nee",
+    "Conflicting Evidence/Cherrypicking": "fc-conflicting",
+  };
+  const LABEL_COLOR = { "Supported": "#2e9d4f", "Refuted": "#d93025", "Not Enough Evidence": "#80868b",
+                        "Conflicting Evidence/Cherrypicking": "#f0a400" };
+  const SKIP = "script,style,noscript,textarea,input,select,button,code,pre,svg,nav,footer,[aria-hidden='true'],[contenteditable='true'],#fc-card-host";
+  const MIN_CHARS = 40, MAX_CHARS = 4000, MAX_BLOCKS = 40;
+
+  // One Highlight object per colour, registered once (names match ::highlight() rules in content.css).
+  const HL = {};
+  for (const name of [...Object.values(LABEL_HL), "fc-checking", "fc-pending"]) {
+    HL[name] = new Highlight();
+    CSS.highlights.set(name, HL[name]);
+  }
+
+  const blocks = new Map();      // blockId -> {el, nodes: Text[]}
+  const blockIdOf = new WeakMap();
+  let nextBlock = 1;
+  const sentTexts = new Map();   // blockId -> last text submitted (to send only new/changed blocks)
+  const claims = new Map();      // claimId -> {claim, verdict, status, ranges: Range[]}
+  let port = null;
+  let autoMode = true;
+
+  // ---------------------------------------------------------------------------- port to service worker
+  function connectPort() {
+    port = chrome.runtime.connect({ name: "factcheck" });
+    port.onMessage.addListener(onMessage);
+    port.onDisconnect.addListener(() => { port = null; setTimeout(connectPort, 2000); });
+  }
+  function post(msg) { if (!port) connectPort(); port.postMessage({ docId: DOC_ID, ...msg }); }
+
+  // ---------------------------------------------------------------------------- block collection
+  // A block = the nearest non-inline ancestor of some text nodes; its text is ONLY those text nodes
+  // (not nested blocks), so nested containers never duplicate text and offsets map 1:1 to Range positions.
+  function collectBlocks(onlyVisible, within = document.body) {
+    const displayCache = new Map();
+    const isBlockish = (el) => {
+      if (!displayCache.has(el)) displayCache.set(el, !/^(inline|contents)/.test(getComputedStyle(el).display));
+      return displayCache.get(el);
+    };
+    const blockOf = (node) => {
+      let el = node.parentElement;
+      while (el && el !== document.body && !isBlockish(el)) el = el.parentElement;
+      return el || document.body;
+    };
+    const groups = new Map();      // element -> Text[]
+    const walker = document.createTreeWalker(within, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const p = n.parentElement;
+        return p && !p.closest(SKIP) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    while (walker.nextNode()) {
+      const el = blockOf(walker.currentNode);
+      if (!groups.has(el)) groups.set(el, []);
+      groups.get(el).push(walker.currentNode);
+    }
+    const out = [];
+    for (const [el, nodes] of groups) {
+      const text = nodes.map((n) => n.nodeValue).join("");
+      if (text.trim().length < MIN_CHARS || text.length > MAX_CHARS) continue;
+      if (onlyVisible) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.bottom < -200 || r.top > innerHeight + 200) continue;
+      }
+      let id = blockIdOf.get(el);
+      if (!id) { id = `b${nextBlock++}`; blockIdOf.set(el, id); }
+      blocks.set(id, { el, nodes });
+      out.push({ id, text });
+    }
+    return out;
+  }
+
+  function submit(force, onlyVisible = true, within = document.body) {
+    const all = collectBlocks(onlyVisible, within);
+    const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
+    if (!fresh.length) return;
+    for (const b of fresh) sentTexts.set(b.id, b.text);
+    post({ type: "submit", title: document.title, url: location.href, blocks: fresh, auto: autoMode || force, force });
+  }
+
+  // ---------------------------------------------------------------------------- span -> Range
+  function rangeFor(blockId, span) {
+    const block = blocks.get(blockId);
+    if (!block || !span) return null;
+    const text = block.nodes.map((n) => n.nodeValue).join("");
+    let start = text.indexOf(span), end = start + span.length;
+    if (start < 0) {                                  // tolerate whitespace differences
+      const map = []; let squashed = "";
+      for (let i = 0; i < text.length; i++) {
+        if (/\s/.test(text[i]) && /\s$/.test(squashed)) continue;
+        squashed += /\s/.test(text[i]) ? " " : text[i]; map.push(i);
+      }
+      const want = span.replace(/\s+/g, " ").trim();
+      const s = squashed.indexOf(want);
+      if (s < 0) return null;
+      start = map[s]; end = map[s + want.length - 1] + 1;
+    }
+    const range = document.createRange();
+    let offset = 0, setStart = false;
+    for (const node of block.nodes) {
+      const len = node.nodeValue.length;
+      if (!setStart && start < offset + len) { range.setStart(node, start - offset); setStart = true; }
+      if (setStart && end <= offset + len) { range.setEnd(node, end - offset); return range; }
+      offset += len;
+    }
+    return null;
+  }
+
+  function rangeAlive(r) { return r && r.startContainer.isConnected && r.endContainer.isConnected && !r.collapsed; }
+
+  // ---------------------------------------------------------------------------- painting
+  function paint(rec) {
+    for (const hl of Object.values(HL)) for (const r of rec.ranges) hl.delete(r);
+    const name = rec.verdict ? LABEL_HL[rec.verdict.label] : rec.status === "checking" ? "fc-checking" : "fc-pending";
+    for (const r of rec.ranges) HL[name].add(r);
+  }
+
+  function reanchor() {
+    for (const rec of claims.values()) {
+      if (rec.ranges.every(rangeAlive)) continue;
+      const block = blocks.get(rec.claim.block_id);
+      if (block && block.el.isConnected) collectBlocks(false, block.el.parentElement || document.body);
+      const r = rangeFor(rec.claim.block_id, rec.claim.span);
+      for (const hl of Object.values(HL)) for (const old of rec.ranges) hl.delete(old);
+      rec.ranges = r ? [r] : [];
+      paint(rec);
+    }
+  }
+
+  function onMessage(msg) {
+    if (msg.type === "claims") {
+      for (const c of msg.claims) {
+        const rec = claims.get(c.id) || { claim: c, verdict: null, status: c.status, ranges: [] };
+        rec.claim = c; rec.status = c.status;
+        const r = rangeFor(c.block_id, c.span);
+        rec.ranges = r ? [r] : [];
+        claims.set(c.id, rec);
+        paint(rec);
+      }
+    } else if (msg.type === "verdict") {
+      const rec = claims.get(msg.claim_id);
+      if (rec) { rec.verdict = msg.verdict; rec.status = "done"; paint(rec); if (card.claimId === msg.claim_id) showCard(rec, card.x, card.y); }
+    } else if (msg.type === "status") {
+      const rec = msg.claim_id && claims.get(msg.claim_id);
+      if (rec) { rec.status = msg.status; paint(rec); }
+      if (msg.status === "error" && msg.message) toast(msg.message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------- hover card (shadow DOM)
+  const host = document.createElement("div");
+  host.id = "fc-card-host";
+  host.style.cssText = "all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0;";
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `<style>
+    .card{position:fixed;max-width:420px;max-height:70vh;overflow:auto;background:#fff;color:#202124;border:1px solid #dadce0;
+      border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;font:13px/1.45 system-ui,sans-serif;display:none}
+    .row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+    .pill{color:#fff;border-radius:999px;padding:2px 9px;font-weight:600;font-size:12px}
+    .bar{flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden}.bar>i{display:block;height:100%}
+    .muted{color:#5f6368;font-size:12px}.h{font-weight:600;margin-top:8px}
+    .src{margin:4px 0;padding-left:8px;border-left:3px solid #dadce0}.src a{color:#1a73e8;text-decoration:none}
+    .q{font-style:italic;color:#3c4043}.badge{font-size:11px;color:#5f6368;margin-left:4px}
+    .corr{background:#fef7e0;border-radius:6px;padding:6px 8px;margin-top:6px}
+    pre{white-space:pre-wrap;background:#f1f3f4;border-radius:6px;padding:6px;font-size:11px;margin:4px 0}
+    button{margin-top:8px;background:#1a73e8;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+    .toast{position:fixed;right:16px;bottom:16px;background:#202124;color:#fff;padding:8px 12px;border-radius:8px;font:13px system-ui;display:none}
+  </style><div class="card" part="card"></div><div class="toast"></div>`;
+  document.documentElement.appendChild(host);
+  const cardEl = shadow.querySelector(".card");
+  const toastEl = shadow.querySelector(".toast");
+  const card = { claimId: null, x: 0, y: 0, hideTimer: null };
+
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function safeHref(url) { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? u.href : null; } catch { return null; } }
+  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+
+  function showCard(rec, x, y) {
+    card.claimId = rec.claim.id; card.x = x; card.y = y;
+    cardEl.replaceChildren();
+    const v = rec.verdict;
+    const head = el("div", "row");
+    if (v) {
+      const pill = el("span", "pill", v.label); pill.style.background = LABEL_COLOR[v.label]; head.append(pill);
+      head.append(el("span", null, pct(v.confidence)));
+      const bar = el("span", "bar"); const fill = el("i"); fill.style.width = pct(v.confidence);
+      fill.style.background = LABEL_COLOR[v.label]; bar.append(fill); head.append(bar);
+    } else {
+      head.append(el("span", "pill", rec.status === "checking" ? "Checking…" : "Not checked yet"));
+      head.lastChild.style.background = "#80868b";
+    }
+    cardEl.append(head, el("div", "muted", rec.claim.text));
+    if (v) {
+      cardEl.append(el("div", "h", "Why this confidence"), el("div", null, v.confidence_reasoning));
+      cardEl.append(el("div", "h", "Explanation"), el("div", null, v.explanation));
+      if (v.corrected_claim) {
+        const box = el("div", "corr");
+        box.append(el("b", null, "Correction: "), document.createTextNode(v.corrected_claim));
+        if (v.correction_confidence != null) box.append(el("div", "muted", `Confidence ${pct(v.correction_confidence)} — ${v.correction_reasoning || ""}`));
+        cardEl.append(box);
+      }
+      if (v.sources?.length) {
+        cardEl.append(el("div", "h", "Sources"));
+        for (const s of v.sources) {
+          const row = el("div", "src");
+          const href = safeHref(s.url);
+          const link = el(href ? "a" : "span", null, s.title || s.url);
+          if (href) { link.href = href; link.target = "_blank"; link.rel = "noopener noreferrer"; }
+          row.append(link, el("span", "badge", s.supports === "correction" ? "· correction" : "· verdict"));
+          const qb = s.quote_verified === true ? "✓ quote found on page" : s.quote_verified === false ? "✗ quote not found on page" : "quote not checked";
+          row.append(el("span", "badge", `· ${qb}`));
+          if (s.in_trace === false) row.append(el("span", "badge", "· not in the agent's search results"));
+          if (s.quote) row.append(el("div", "q", `“${s.quote}”`));
+          cardEl.append(row);
+        }
+      }
+      if (v.computations?.length) {
+        const det = el("details"); det.append(el("summary", null, `Computations (${v.computations.length})`));
+        for (const c of v.computations) det.append(el("pre", null, `$ ${c.command}\n${c.output}`));
+        cardEl.append(det);
+      }
+      if (v.flags?.length) cardEl.append(el("div", "muted", `flags: ${v.flags.join(", ")}`));
+    } else if (rec.status !== "checking") {
+      const b = el("button", null, "Check this claim");
+      b.addEventListener("click", () => { post({ type: "check", claimId: rec.claim.id }); rec.status = "checking"; paint(rec); showCard(rec, x, y); });
+      cardEl.append(b);
+    }
+    cardEl.style.display = "block";
+    const w = cardEl.offsetWidth, h = cardEl.offsetHeight;
+    cardEl.style.left = `${Math.max(8, Math.min(x + 12, innerWidth - w - 8))}px`;
+    cardEl.style.top = `${y + 18 + h > innerHeight ? Math.max(8, y - h - 12) : y + 18}px`;
+  }
+
+  function hideCardSoon() {
+    clearTimeout(card.hideTimer);
+    card.hideTimer = setTimeout(() => { cardEl.style.display = "none"; card.claimId = null; }, 350);
+  }
+  cardEl.addEventListener("mouseenter", () => clearTimeout(card.hideTimer));
+  cardEl.addEventListener("mouseleave", hideCardSoon);
+
+  function claimAtPoint(x, y) {
+    const pos = document.caretPositionFromPoint ? document.caretPositionFromPoint(x, y) : null;
+    const node = pos ? pos.offsetNode : document.caretRangeFromPoint?.(x, y)?.startContainer;
+    const offset = pos ? pos.offset : document.caretRangeFromPoint?.(x, y)?.startOffset;
+    if (!node) return null;
+    for (const rec of claims.values()) {
+      for (const r of rec.ranges) {
+        if (!rangeAlive(r)) continue;
+        try { if (!r.isPointInRange(node, offset)) continue; } catch { continue; }
+        for (const rect of r.getClientRects()) {        // caret snaps to nearest text: confirm the pointer is on it
+          if (x >= rect.left - 2 && x <= rect.right + 2 && y >= rect.top - 2 && y <= rect.bottom + 2) return rec;
+        }
+      }
+    }
+    return null;
+  }
+
+  let moveQueued = false;
+  document.addEventListener("mousemove", (e) => {
+    if (moveQueued) return;
+    moveQueued = true;
+    requestAnimationFrame(() => {
+      moveQueued = false;
+      const rec = claimAtPoint(e.clientX, e.clientY);
+      if (rec) { clearTimeout(card.hideTimer); if (card.claimId !== rec.claim.id) showCard(rec, e.clientX, e.clientY); }
+      else if (card.claimId) hideCardSoon();
+    });
+  }, { passive: true });
+
+  function toast(text) {
+    toastEl.textContent = `Fact check: ${text}`;
+    toastEl.style.display = "block";
+    setTimeout(() => { toastEl.style.display = "none"; }, 6000);
+  }
+
+  // ---------------------------------------------------------------------------- triggers
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  const onScroll = debounce(() => { if (autoMode) submit(false); }, 1200);
+  const onMutate = debounce(() => { reanchor(); if (autoMode) submit(false); }, 1500);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  new MutationObserver((records) => {
+    if (records.every((r) => host.contains(r.target))) return;   // ignore our own card updates
+    onMutate();
+  }).observe(document.body, { childList: true, subtree: true, characterData: true });
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "checkPage") submit(true);
+    if (msg.type === "checkSelection") {
+      const sel = getSelection();
+      if (sel && sel.rangeCount) {
+        const anc = sel.getRangeAt(0).commonAncestorContainer;
+        submit(true, false, anc.nodeType === 1 ? anc : anc.parentElement);
+      }
+    }
+  });
+
+  chrome.storage.local.get({ autoMode: true }).then((s) => {
+    autoMode = s.autoMode;
+    connectPort();
+    if (autoMode) setTimeout(() => submit(false), 1200);
+  });
+  chrome.storage.onChanged.addListener((c) => { if (c.autoMode) autoMode = c.autoMode.newValue; });
+})();
