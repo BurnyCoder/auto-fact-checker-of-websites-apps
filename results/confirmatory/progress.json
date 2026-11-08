@@ -1,0 +1,28 @@
+{
+ "updated": "2026-11-08T19:23:58",
+ "spent_total_usd": 7.211678,
+ "budget_usd": 10.0,
+ "conditions": {
+  "closed_book": {
+   "done": 120,
+   "total": 120,
+   "correct": 58,
+   "scored": 120,
+   "cost_usd": 0.0896
+  },
+  "web_blocked": {
+   "done": 120,
+   "total": 120,
+   "correct": 84,
+   "scored": 120,
+   "cost_usd": 2.4021
+  },
+  "web_default": {
+   "done": 120,
+   "total": 120,
+   "correct": 86,
+   "scored": 120,
+   "cost_usd": 2.247
+  }
+ }
+}

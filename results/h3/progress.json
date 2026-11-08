@@ -1,0 +1,21 @@
+{
+ "updated": "2026-11-08T19:35:34",
+ "spent_total_usd": 7.593036,
+ "budget_usd": 10.0,
+ "conditions": {
+  "h3_clean": {
+   "done": 500,
+   "total": 500,
+   "correct": 245,
+   "scored": 500,
+   "cost_usd": 0.4002
+  },
+  "h3_ocr": {
+   "done": 500,
+   "total": 500,
+   "correct": 249,
+   "scored": 500,
+   "cost_usd": 0.391
+  }
+ }
+}
