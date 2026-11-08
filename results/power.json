@@ -1,0 +1,48 @@
+{
+  "pilot_n": 25,
+  "pilot_accuracy": {
+    "closed_book": 0.52,
+    "web_blocked": 0.56,
+    "web_default": 0.72
+  },
+  "pilot_cost_per_claim_usd": {
+    "closed_book": 0.0009436799999999999,
+    "web_blocked": 0.022249353999999995,
+    "web_default": 0.0210528844
+  },
+  "reserved_other_usd": 1.805,
+  "web_cost_per_item_usd": 0.0442,
+  "n_web": 120,
+  "comparisons": {
+    "H1 web_blocked vs closed_book": {
+      "pilot_p_a_only": 0.28,
+      "pilot_p_b_only": 0.24,
+      "pilot_effect": 0.040000000000000036,
+      "power_at_n_web_if_pilot_effect_true": 0.11575,
+      "mde_at_n_web_80pct_power": 0.17500000000000002,
+      "power_curve": {
+        "50": 0.07375,
+        "80": 0.0985,
+        "100": 0.1135,
+        "120": 0.11575,
+        "150": 0.1485,
+        "200": 0.1705
+      }
+    },
+    "H2 web_default vs web_blocked": {
+      "pilot_p_a_only": 0.24,
+      "pilot_p_b_only": 0.08,
+      "pilot_effect": 0.15999999999999998,
+      "power_at_n_web_if_pilot_effect_true": 0.92025,
+      "mde_at_n_web_80pct_power": 0.135,
+      "power_curve": {
+        "50": 0.5705,
+        "80": 0.7745,
+        "100": 0.862,
+        "120": 0.92025,
+        "150": 0.962,
+        "200": 0.9915
+      }
+    }
+  }
+}

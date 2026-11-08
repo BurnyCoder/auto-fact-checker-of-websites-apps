@@ -37,3 +37,4 @@ playwright-report/
 Thumbs.db
 .vscode/
 .idea/
+results/dashboard.html

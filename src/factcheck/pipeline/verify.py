@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from claude_agent_sdk import HookMatcher
@@ -28,7 +29,7 @@ from factcheck.pipeline.prompts import (
     build_verify_system,
 )
 from factcheck.pipeline.sandbox import DEFAULT_SANDBOX, SandboxConfig
-from factcheck.pipeline.sources import mark_in_trace, verify_quotes
+from factcheck.pipeline.sources import mark_in_trace, urls_in_trace, verify_quotes
 from factcheck.pipeline.workspace import workspace
 
 log = logging.getLogger(__name__)
@@ -99,6 +100,22 @@ def evidence_digest(run: AgentRun, limit_each: int = 2500, limit_total: int = 20
     return "\n\n".join(parts) or "(no tool outputs)"
 
 
+_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]{1,300})"')
+
+
+def evidence_records(run: AgentRun, head_chars: int = 1500) -> list[dict]:
+    """Compact, auditable view of what the agent saw: per tool call its input, URLs, result titles and output head.
+    Used by the benchmark's preregistered leakage audit (and kept small enough to commit with results)."""
+    out = []
+    for ev in run.trace:
+        if ev.name == "StructuredOutput":
+            continue
+        out.append({"tool": ev.name, "input": json.dumps(ev.input, ensure_ascii=False)[:400],
+                    "urls": sorted(urls_in_trace([ev]))[:25], "titles": _TITLE_RE.findall(ev.output)[:25],
+                    "output_head": ev.output[:head_chars], "is_error": ev.is_error})
+    return out
+
+
 def _parse(structured) -> tuple[Verdict | None, str | None]:
     try:
         return Verdict.model_validate(structured), None
@@ -127,17 +144,30 @@ async def verify_claim(claim: Claim, runner: AgentRunner, cfg: VerifyConfig, *, 
             worst_case_usd=cfg.worst_case_usd(), timeout_s=cfg.timeout_s, meta={"claim_id": claim.id},
         )
     total_cost = run.cost_usd
-    if not run.ok:
+    flags: list[str] = []
+    structured = run.structured if run.ok else None
+    if structured is None and run.trace and "structured output" in (run.error or "").lower():
+        # The agent gathered evidence but never produced schema-valid JSON (seen in 3/75 pilot runs): salvage it
+        # with the cheap tool-less repair pass instead of discarding the evidence.
+        log.info("structured output failed for %s; repairing from the collected evidence", claim.id)
+        reason = f"the previous attempt produced no valid answer: {(run.error or '')[:200]}"
+        salvage = await runner.run(build_repair_prompt(claim, {}, [reason], evidence_digest(run)),
+                                   kind="repair", purpose=purpose, system_prompt=REPAIR_SYSTEM, schema=VERDICT_SCHEMA,
+                                   tools=[], max_turns=3, worst_case_usd=0.03, timeout_s=90, meta={"claim_id": claim.id})
+        total_cost += salvage.cost_usd
+        if salvage.ok:
+            structured = salvage.structured
+            flags.append("salvaged")
+    if structured is None:
         v = failed_verdict(claim, run.error or "no structured output")
         v.cost_usd, v.duration_s, v.model, v.auth = total_cost, run.duration_s, runner.settings.model, run.auth
         return v
 
-    verdict, parse_error = _parse(run.structured)
+    verdict, parse_error = _parse(structured)
     problems = [parse_error] if parse_error else rule_violations(verdict, require_sources=cfg.web)
-    flags: list[str] = []
     if problems:                                         # one cheap, tool-less repair pass over the same evidence
         log.info("verdict for %s broke rules %s; repairing", claim.id, problems)
-        repair = await runner.run(build_repair_prompt(claim, run.structured or {}, problems, evidence_digest(run)),
+        repair = await runner.run(build_repair_prompt(claim, structured or {}, problems, evidence_digest(run)),
                                   kind="repair", purpose=purpose, system_prompt=REPAIR_SYSTEM, schema=VERDICT_SCHEMA,
                                   tools=[], max_turns=3, worst_case_usd=0.03, timeout_s=90,
                                   meta={"claim_id": claim.id})
@@ -180,4 +210,5 @@ async def verify_claim(claim: Claim, runner: AgentRunner, cfg: VerifyConfig, *, 
     verdict.tool_counts = run.tool_counts()
     verdict.model = runner.settings.model
     verdict.auth = run.auth
+    verdict.evidence = evidence_records(run)
     return verdict

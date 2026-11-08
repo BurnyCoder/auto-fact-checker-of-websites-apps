@@ -10,6 +10,7 @@ backend thread, never on Qt's single-threaded UI thread.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,6 +25,7 @@ class OcrLine:
 
 
 _engines: dict[str, object] = {}
+_ocr_lock: asyncio.Lock | None = None   # one OcrEngine cannot run two RecognizeAsync calls at once (WinError -2147467260)
 
 
 def _engine(language: str):
@@ -55,7 +57,11 @@ async def ocr_bgra(pixels: np.ndarray, origin_x: int = 0, origin_y: int = 0, lan
     buf.length = len(data)                                    # the memoryview spans `length`, so set it first
     memoryview(buf)[:] = data
     bitmap = SoftwareBitmap.create_copy_from_buffer(buf, BitmapPixelFormat.BGRA8, width, height)
-    result = await _engine(language).recognize_async(bitmap)
+    global _ocr_lock
+    if _ocr_lock is None:
+        _ocr_lock = asyncio.Lock()
+    async with _ocr_lock:                                     # serialise recognitions (observed error when concurrent)
+        result = await _engine(language).recognize_async(bitmap)
     lines = []
     for line in result.lines:
         rects = [w.bounding_rect for w in line.words]

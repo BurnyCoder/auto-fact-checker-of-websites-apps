@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eval dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #202124; max-width: 900px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { border-bottom: 1px solid #e0e0e0; padding: 6px 8px; text-align: left; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; background: #e8eaed; border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #1a73e8; }
+  select { font: inherit; }
+  .muted { color: #5f6368; }
+</style>
+</head>
+<body>
+<h2>Benchmark run — live</h2>
+<label>Experiment <select id="exp"></select></label> <span class="muted" id="updated"></span>
+<div id="spend"></div>
+<table><thead><tr><th>Condition</th><th>Done</th><th>Accuracy (95 % Wilson CI)</th><th>Cost</th></tr></thead><tbody id="rows"></tbody></table>
+<p class="muted">Refreshes every 5 s from <code>results/&lt;experiment&gt;/progress.json</code>, written by <code>eval/run.py</code> after each item.</p>
+<script>
+const EXPS = ["pilot", "confirmatory", "h3", "e2", "smoke/confirmatory", "smoke/h3"];
+const sel = document.getElementById("exp");
+for (const e of EXPS) sel.add(new Option(e, e));
+function wilson(k, n, z = 1.96) {            // Wilson score interval for a proportion
+  if (!n) return [0, 0];
+  const p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return [(c - m) / d, (c + m) / d];
+}
+async function refresh() {
+  try {
+    const r = await fetch(`${sel.value}/progress.json?t=${Date.now()}`);
+    if (!r.ok) throw new Error(r.status);
+    const p = await r.json();
+    document.getElementById("updated").textContent = `updated ${p.updated}`;
+    document.getElementById("spend").textContent = `Project spend: $${p.spent_total_usd.toFixed(3)} of $${p.budget_usd.toFixed(2)}`;
+    const tbody = document.getElementById("rows"); tbody.replaceChildren();
+    for (const [cond, c] of Object.entries(p.conditions)) {
+      const acc = c.scored ? c.correct / c.scored : 0, [lo, hi] = wilson(c.correct, c.scored);
+      const tr = document.createElement("tr");
+      const cells = [cond, `${c.done}/${c.total}`, c.scored ? `${(acc * 100).toFixed(1)} % [${(lo * 100).toFixed(1)}, ${(hi * 100).toFixed(1)}]` : "—", `$${c.cost_usd.toFixed(3)}`];
+      for (const t of cells) { const td = document.createElement("td"); td.textContent = t; tr.append(td); }
+      const bar = document.createElement("div"); bar.className = "bar"; const fill = document.createElement("i");
+      fill.style.width = `${(100 * c.done / Math.max(1, c.total)).toFixed(1)}%`; bar.append(fill); tr.children[1].append(bar);
+      tbody.append(tr);
+    }
+  } catch (e) { document.getElementById("updated").textContent = `no progress file yet (${e.message})`; }
+}
+sel.addEventListener("change", refresh);
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
