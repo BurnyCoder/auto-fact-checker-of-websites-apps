@@ -26,6 +26,10 @@
   <label><input id="autoMode" type="checkbox"> Check pages automatically while I read
     <span class="hint">Off: only the keyboard shortcut (Alt+Shift+F), the popup button or the right-click menu start a check.</span>
   </label>
+  <label>Never check these sites (one per line; subdomains included)
+    <textarea id="blockedSites" rows="7" style="width:100%;box-sizing:border-box;font:12px monospace"></textarea>
+    <span class="hint">Pages on these sites are never sent anywhere. Pages with a visible password field are never checked automatically.</span>
+  </label>
   <button id="save">Save</button>
   <div id="status"></div>
   <script src="options.js"></script>

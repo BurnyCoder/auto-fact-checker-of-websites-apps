@@ -1,5 +1,8 @@
 // options.js — load/save extension settings in chrome.storage.local and show the connection status.
-const DEFAULTS = { serverUrl: "ws://127.0.0.1:8765/ws", token: "", autoMode: true };
+const DEFAULT_BLOCKED_SITES = ["mail.google.com", "outlook.live.com", "outlook.office.com", "mail.yahoo.com", "mail.proton.me",
+  "web.whatsapp.com", "web.telegram.org", "messages.google.com", "vault.bitwarden.com", "my.1password.com", "keepersecurity.com",
+  "accounts.google.com", "login.microsoftonline.com", "login.live.com"];   // keep in sync with content.js
+const DEFAULTS = { serverUrl: "ws://127.0.0.1:8765/ws", token: "", autoMode: true, blockedSites: DEFAULT_BLOCKED_SITES };
 const $ = (id) => document.getElementById(id);
 
 async function load() {
@@ -7,6 +10,7 @@ async function load() {
   $("serverUrl").value = s.serverUrl;
   $("token").value = s.token;
   $("autoMode").checked = s.autoMode;
+  $("blockedSites").value = s.blockedSites.join(String.fromCharCode(10));   // one site per line
   refreshStatus();
 }
 
@@ -19,7 +23,8 @@ async function refreshStatus() {
 
 $("save").addEventListener("click", async () => {
   await chrome.storage.local.set({ serverUrl: $("serverUrl").value.trim() || DEFAULTS.serverUrl,
-                                   token: $("token").value.trim(), autoMode: $("autoMode").checked });
+                                   token: $("token").value.trim(), autoMode: $("autoMode").checked,
+                                   blockedSites: $("blockedSites").value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) });
   $("status").textContent = "Saved. Connecting…";
   setTimeout(refreshStatus, 1500);
 });

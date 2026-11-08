@@ -87,13 +87,37 @@
     return out;
   }
 
+  // Auto-mode rate limit (code review: constantly changing pages such as tickers or chats would otherwise trigger an
+  // extraction call on every change): at most one automatic submit per 5 s and 40 per page load.
+  const AUTO_MIN_GAP_MS = 5000, AUTO_MAX_PER_PAGE = 40;
+  let lastAuto = 0, autoCount = 0, autoPaused = false;
+
   function submit(force, onlyVisible = true, within = document.body) {
+    if (siteBlocked) { if (force) toast("this site is on your never-check list (extension Options)"); return; }
+    if (!force) {
+      if (autoPaused || hasPasswordField()) return;     // never auto-send login/vault pages
+      const now = Date.now();
+      if (now - lastAuto < AUTO_MIN_GAP_MS) return;
+      if (++autoCount > AUTO_MAX_PER_PAGE) { autoPaused = true; toast("auto-check paused on this busy page; press Alt+Shift+F to check it"); return; }
+      lastAuto = now;
+    }
     const all = collectBlocks(onlyVisible, within);
     const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
     if (!fresh.length) return;
     for (const b of fresh) sentTexts.set(b.id, b.text);
     post({ type: "submit", title: document.title, url: location.href, blocks: fresh, auto: autoMode || force, force });
   }
+
+  function hasPasswordField() {
+    return [...document.querySelectorAll("input[type=password]")].some((i) => i.offsetParent !== null);
+  }
+
+  // Sites never checked (webmail, messaging, password vaults, sign-in pages); editable in Options.
+  const DEFAULT_BLOCKED_SITES = ["mail.google.com", "outlook.live.com", "outlook.office.com", "mail.yahoo.com", "mail.proton.me",
+    "web.whatsapp.com", "web.telegram.org", "messages.google.com", "vault.bitwarden.com", "my.1password.com", "keepersecurity.com",
+    "accounts.google.com", "login.microsoftonline.com", "login.live.com"];
+  let siteBlocked = false;
+  function matchesSite(host, site) { site = site.trim().toLowerCase(); return !!site && (host === site || host.endsWith("." + site)); }
 
   // ---------------------------------------------------------------------------- span -> Range
   function rangeFor(blockId, span) {
@@ -168,7 +192,9 @@
   const host = document.createElement("div");
   host.id = "fc-card-host";
   host.style.cssText = "all: initial; position: fixed; z-index: 2147483647; top: 0; left: 0;";
-  const shadow = host.attachShadow({ mode: "open" });
+  // Closed shadow root: page scripts cannot read the card or click "Check this claim" to spend budget (code review).
+  const shadow = host.attachShadow({ mode: "closed" });
+  let debugExpose = false;                       // extension-only storage flag used by the Playwright test
   shadow.innerHTML = `<style>
     .card{position:fixed;max-width:420px;max-height:70vh;overflow:auto;background:#fff;color:#202124;border:1px solid #dadce0;
       border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;font:13px/1.45 system-ui,sans-serif;display:none}
@@ -243,6 +269,7 @@
       cardEl.append(b);
     }
     cardEl.style.display = "block";
+    if (debugExpose) host.dataset.debugCard = cardEl.innerText;   // test-only mirror (closed shadow root)
     const w = cardEl.offsetWidth, h = cardEl.offsetHeight;
     cardEl.style.left = `${Math.max(8, Math.min(x + 12, innerWidth - w - 8))}px`;
     cardEl.style.top = `${y + 18 + h > innerHeight ? Math.max(8, y - h - 12) : y + 18}px`;
@@ -250,7 +277,7 @@
 
   function hideCardSoon() {
     clearTimeout(card.hideTimer);
-    card.hideTimer = setTimeout(() => { cardEl.style.display = "none"; card.claimId = null; }, 350);
+    card.hideTimer = setTimeout(() => { cardEl.style.display = "none"; card.claimId = null; delete host.dataset.debugCard; }, 350);
   }
   cardEl.addEventListener("mouseenter", () => clearTimeout(card.hideTimer));
   cardEl.addEventListener("mouseleave", hideCardSoon);
@@ -311,8 +338,11 @@
     }
   });
 
-  chrome.storage.local.get({ autoMode: true }).then((s) => {
+  chrome.storage.local.get({ autoMode: true, blockedSites: DEFAULT_BLOCKED_SITES, debugExposeCard: false }).then((s) => {
     autoMode = s.autoMode;
+    debugExpose = !!s.debugExposeCard;
+    siteBlocked = s.blockedSites.some((site) => matchesSite(location.hostname.toLowerCase(), site));
+    if (siteBlocked) return;                      // never connect or send anything from blocked sites
     connectPort();
     if (autoMode) setTimeout(() => submit(false), 1200);
   });
