@@ -1,0 +1,111 @@
+"""Desktop app entry point (`uv run factcheck`): wires the phases together.
+
+Phases, in order:
+  1. load_config      — Settings from .env
+  2. setup_logging    — timestamped logs + full LLM record (logs/)
+  3. create_qt_app    — QApplication FIRST, so Qt sets per-monitor DPI awareness before mss does
+  4. build_backend    — server + fact-check service + desktop capture on a background asyncio loop
+  5. build_ui         — side panel, per-monitor overlay, tray menu, global hotkey
+  6. run              — start the backend, then the Qt event loop
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
+
+from factcheck.backend import Backend
+from factcheck.capture.watcher import DesktopCapture
+from factcheck.config import Settings, load_settings
+from factcheck.log import setup_logging
+from factcheck.pipeline.sandbox import sandbox_available
+from factcheck.ui.hotkey import HotkeyFilter
+from factcheck.ui.overlay import OverlayManager
+from factcheck.ui.panel import Panel
+from factcheck.ui.state import Bridge, UiState
+from factcheck.ui.tray import Tray
+
+log = logging.getLogger("factcheck.app")
+
+
+def create_qt_app() -> QApplication:
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)                 # closing the panel keeps the tray app running
+    app.setApplicationName("fact-check-websites-apps")
+    return app
+
+
+def build_backend(settings: Settings) -> tuple[Backend, DesktopCapture]:
+    backend = Backend(settings)
+    capture = DesktopCapture(settings, backend.service, lambda: backend.extension_connected)
+    backend.add_startup_task(capture.run_continuous)
+    return backend, capture
+
+
+def build_ui(settings: Settings, backend: Backend, capture: DesktopCapture, qt: QApplication) -> dict:
+    """Create the UI objects; returns them so they stay referenced for the app's lifetime."""
+    state = UiState()
+    bridge = Bridge()
+    bridge.event.connect(state.on_event)
+    backend.service.listeners.append(bridge.listener)
+
+    def status_text() -> str:
+        spent = backend.ledger.spent_total()
+        mode = "paused" if capture.paused else f"trigger: {settings.factcheck_mode}"
+        fake = " · FAKE MODE (no real checks)" if settings.factcheck_fake_llm else ""
+        return f"Spent ${spent:.3f} of ${settings.total_budget_usd:.2f} · {mode}{fake}"
+
+    def check_now() -> None:
+        backend.call(capture.capture_now())
+
+    panel = Panel(state, on_check=lambda cid: backend.call_soon(backend.service.check, cid), status_text=status_text)
+    overlays = OverlayManager(state, debug_visible_in_capture=os.environ.get("FACTCHECK_OVERLAY_DEBUG") == "1")
+
+    def set_display(display: str) -> None:
+        settings.factcheck_display = display
+        overlays.set_visible(display in ("overlay", "both"))
+        panel.setVisible(display in ("panel", "both"))
+
+    def set_mode(mode: str) -> None:
+        settings.factcheck_mode = mode
+        capture.continuous_enabled = mode in ("continuous", "both")
+        hotkey_enabled[0] = mode in ("hotkey", "both")
+
+    hotkey_enabled = [settings.factcheck_mode in ("hotkey", "both")]
+    hotkey = HotkeyFilter(settings.hotkey, lambda: check_now() if hotkey_enabled[0] else None)
+
+    def copy_token() -> None:
+        QGuiApplication.clipboard().setText(settings.server_token)
+        tray.showMessage("Fact check", "Extension token copied. Paste it in the extension's Options page.")
+
+    tray = Tray(mode=settings.factcheck_mode, display=settings.factcheck_display,
+                on_pause=lambda on: setattr(capture, "paused", on), on_check_now=check_now, on_mode=set_mode,
+                on_display=set_display, on_show_panel=lambda: (panel.show(), panel.raise_(), panel.activateWindow()),
+                on_copy_token=copy_token, on_open_logs=lambda: os.startfile(settings.logs_dir),
+                budget_text=status_text, on_quit=qt.quit)
+    set_display(settings.factcheck_display)
+    return {"state": state, "bridge": bridge, "panel": panel, "overlays": overlays, "hotkey": hotkey, "tray": tray}
+
+
+def main() -> None:
+    settings = load_settings()
+    setup_logging(settings.logs_dir, name="app")
+    ok, why = sandbox_available()
+    log.info("starting: mode=%s display=%s fake=%s sandbox=%s", settings.factcheck_mode, settings.factcheck_display,
+             settings.factcheck_fake_llm, "ok" if ok else why)
+    qt = create_qt_app()
+    backend, capture = build_backend(settings)
+    ui = build_ui(settings, backend, capture, qt)
+    backend.start()
+    code = qt.exec()
+    ui["hotkey"].close()
+    backend.stop()
+    sys.exit(code)
+
+
+if __name__ == "__main__":
+    main()

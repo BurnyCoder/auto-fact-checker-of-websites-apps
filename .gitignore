@@ -19,6 +19,7 @@ logs/
 .agent-work/
 .agent-cwd/
 data/cache/
+data/server_token.txt
 *.sqlite
 *.sqlite-journal
 
