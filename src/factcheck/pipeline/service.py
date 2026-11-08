@@ -41,6 +41,7 @@ class FactCheckService:
         self._queue: asyncio.PriorityQueue | None = None
         self._seq = itertools.count()
         self._running: dict[str, asyncio.Task] = {}      # claim_id -> running verification task
+        self._inflight: set[str] = set()                 # claim ids queued or running (prevents duplicate checks)
         self._cancelled: set[str] = set()                # source ids whose queued work must be skipped
         self._workers: list[asyncio.Task] = []
         self.verify_cfg = VerifyConfig(max_searches=settings.max_web_searches, max_fetches=settings.max_web_fetches,
@@ -88,7 +89,12 @@ class FactCheckService:
         auto_left = self.settings.max_auto_checks_per_batch if auto else 0
         to_queue: list[Claim] = []
         cache_hits = []
-        for claim in claims:
+        self._prune()
+        for i, claim in enumerate(claims):
+            known = self.claims.get(claim.id)
+            if known is not None and (known.id in self._inflight or known.status == "done"):
+                claims[i] = known                        # already checking / checked: never verify twice
+                continue
             self.claims[claim.id] = claim
             cached = self.cache.get(claim.text) if self.cache else None
             if cached is not None:                       # reuse a recent verdict: no cost
@@ -112,7 +118,7 @@ class FactCheckService:
     def check(self, claim_id: str) -> bool:
         """Queue a verification for a known claim (the 'click to check' path)."""
         claim = self.claims.get(claim_id)
-        if claim is None or claim.status in ("checking", "done"):
+        if claim is None or claim_id in self._inflight or claim.status == "done":
             return False
         claim.status = "checking"
         self._cancelled.discard(claim.source.source_id)
@@ -126,10 +132,30 @@ class FactCheckService:
             claim = self.claims.get(cid)
             if claim is not None and claim.source.source_id == source_id:
                 task.cancel()
+        for claim in self.claims.values():                # queued-but-dropped claims become "click to check" again
+            if claim.source.source_id == source_id and claim.id in self._inflight and claim.id not in self._running:
+                self._inflight.discard(claim.id)
+                self._set_pending(claim)
 
     # ------------------------------------------------------------------ internals
+    def _set_pending(self, claim: Claim) -> None:
+        claim.status = "pending"
+        self.emit({"type": "status", "source_id": claim.source.source_id, "claim_id": claim.id, "status": "pending",
+                   "message": "cancelled; click to check"})
+
+    def _prune(self, keep: int = 5000) -> None:
+        """Bound memory in long sessions: forget the oldest finished claims and per-source block fingerprints."""
+        if len(self.claims) > keep:
+            for cid in list(self.claims)[: len(self.claims) - keep]:
+                if cid not in self._inflight:
+                    self.claims.pop(cid, None)
+        for seen in self._seen_blocks.values():
+            if len(seen) > 4000:
+                seen.clear()
+
     def _enqueue(self, claim: Claim) -> None:
         assert self._queue is not None, "call start() first"
+        self._inflight.add(claim.id)
         self._queue.put_nowait((-next(self._seq), claim.id))   # negative counter = newest first
         self.emit({"type": "status", "source_id": claim.source.source_id, "claim_id": claim.id, "status": "checking",
                    "message": "queued"})
@@ -139,27 +165,37 @@ class FactCheckService:
         while True:
             _, claim_id = await self._queue.get()
             claim = self.claims.get(claim_id)
-            if claim is None or claim.source.source_id in self._cancelled:
+            if claim is None or claim.source.source_id in self._cancelled or claim_id not in self._inflight:
                 continue
             task = asyncio.create_task(self._verify(claim))
             self._running[claim_id] = task
             try:
                 await task
             except asyncio.CancelledError:
-                if asyncio.current_task().cancelled():     # the worker itself is being stopped
+                # .cancelling() (not .cancelled(), always False while the task runs) tells whether the *worker*
+                # is being stopped, as opposed to only this verification (code-review finding #3)
+                if asyncio.current_task().cancelling():
                     raise
-                claim.status = "pending"
+                self._set_pending(claim)
+            except Exception:
+                log.exception("verification of %s crashed", claim_id)
+                claim.status = "error"
             finally:
                 self._running.pop(claim_id, None)
+                self._inflight.discard(claim_id)
 
     async def _verify(self, claim: Claim) -> None:
         context = context_lines(app=claim.source.app, title=claim.source.title, url=claim.source.url)
         try:
             verdict = await verify_claim(claim, self.runner, self.verify_cfg, purpose="app-verify", context=context)
-        except BudgetExceeded as exc:
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
             claim.status = "error"
+            if not isinstance(exc, BudgetExceeded):
+                log.exception("verify_claim failed for %s", claim.id)
             self.emit({"type": "status", "source_id": claim.source.source_id, "claim_id": claim.id, "status": "error",
-                       "message": str(exc)})
+                       "message": f"{type(exc).__name__}: {exc}"[:300]})
             return
         claim.status = "done" if not verdict.error else "error"
         if self.cache is not None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -112,10 +112,13 @@ class Panel(QWidget):
         outer.addWidget(scroll)
         self.cards: dict[str, ClaimCard] = {}
         state.changed.connect(self.refresh)
+        self.header_timer = QTimer(self)                    # header (spend) every 5 s, not on every event: reading the
+        self.header_timer.timeout.connect(lambda: self.header.setText(self.status_text()))  # ledger is file I/O
+        self.header_timer.start(5000)
+        self.header.setText(self.status_text())
         self.refresh()
 
     def refresh(self) -> None:
-        self.header.setText(self.status_text())
         for cid in self.state.order[-MAX_CARDS:]:
             card = self.cards.get(cid)
             if card is None:

@@ -27,8 +27,11 @@ _URL_RE = re.compile(r"https?://[^\s\"'<>\]\)\}]+")
 
 def normalize_url(url: str) -> str:
     """Comparable form: no scheme, no 'www.', no fragment, no tracking params, no trailing slash."""
-    parts = urlsplit(url.strip().rstrip(".,;"))
-    host = (parts.hostname or "").lower().removeprefix("www.")
+    try:
+        parts = urlsplit(url.strip().rstrip(".,;"))
+        host = (parts.hostname or "").lower().removeprefix("www.")
+    except ValueError:                                     # e.g. a truncated "[2001:db8::1" from regex extraction
+        return url.strip().lower()
     query = urlencode([(k, v) for k, v in parse_qsl(parts.query) if not k.lower().startswith(("utm_", "fbclid", "gclid"))])
     path = parts.path.rstrip("/")
     return f"{host}{path}" + (f"?{query}" if query else "")
@@ -65,11 +68,16 @@ async def _page_text(url: str, policy: UrlPolicy, timeout_s: float) -> str | Non
     if policy.check(url):
         return None
     try:
-        async with public_only_client(timeout_s) as client:
-            resp = await client.get(url)
+        async with (asyncio.timeout(timeout_s), public_only_client(timeout_s) as client,   # overall deadline
+                    client.stream("GET", url) as resp):
             if resp.status_code >= 400 or "html" not in resp.headers.get("content-type", "html"):
                 return None                               # PDFs etc. are not checked here (stay None)
-            html = resp.text[:3_000_000]
+            body = bytearray()
+            async for chunk in resp.aiter_bytes():
+                body += chunk
+                if len(body) > 3_000_000:                  # cap page size (slow or huge pages must not stall a worker)
+                    break
+            html = body.decode(resp.encoding or "utf-8", errors="replace")
     except Exception:  # noqa: BLE001 - any network failure just means "could not check"
         return None
     main = trafilatura.extract(html, include_tables=True) or ""   # main content (https://trafilatura.readthedocs.io)

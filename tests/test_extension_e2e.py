@@ -58,7 +58,7 @@ def test_extension_highlights_and_hover_card(tmp_path, backend, page_server):
             worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
             assert worker.url.startswith("chrome-extension://")
             worker.evaluate("s => chrome.storage.local.set(s)",
-                            {"token": backend.settings.server_token, "autoMode": True,
+                            {"token": backend.settings.server_token, "autoMode": True, "debugExposeCard": True,
                              "serverUrl": f"ws://127.0.0.1:{backend.port}/ws"})
             page = ctx.new_page()
             page.goto(f"{page_server}/article.html")
@@ -73,9 +73,9 @@ def test_extension_highlights_and_hover_card(tmp_path, backend, page_server):
             box = page.evaluate("""() => { const b = document.querySelector('p b'); const r = b.getBoundingClientRect();
                                            return {x: r.left + r.width / 2, y: r.top + r.height / 2}; }""")
             page.mouse.move(box["x"], box["y"])
-            page.wait_for_function("() => document.querySelector('#fc-card-host').shadowRoot.querySelector('.card').style.display === 'block'",
-                                   timeout=5000)
-            card = page.evaluate("() => document.querySelector('#fc-card-host').shadowRoot.querySelector('.card').innerText")
+            assert page.evaluate("() => document.querySelector('#fc-card-host').shadowRoot") is None   # closed to the page
+            page.wait_for_function("() => !!document.querySelector('#fc-card-host').dataset.debugCard", timeout=5000)
+            card = page.evaluate("() => document.querySelector('#fc-card-host').dataset.debugCard")
             assert "Why this confidence" in card and "62%" in card and "Eiffel Tower" in card
         finally:
             ctx.close()

@@ -110,6 +110,19 @@ def _result_text(content: Any) -> str:
     return "\n".join(parts)
 
 
+def _sum_usage(usages) -> dict[str, Any] | None:
+    """Add up per-message usage dicts (token counts and cache-creation breakdown) for partial runs."""
+    total: dict[str, Any] = {}
+    for u in usages:
+        for k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
+            total[k] = total.get(k, 0) + (u.get(k) or 0)
+        cc = u.get("cache_creation") or {}
+        tc = total.setdefault("cache_creation", {"ephemeral_1h_input_tokens": 0, "ephemeral_5m_input_tokens": 0})
+        for k in tc:
+            tc[k] += cc.get(k) or 0
+    return total or None
+
+
 class AuthFallback(Exception):
     """Internal signal: subscription auth failed or hit its limit; retry with the API key."""
 
@@ -176,6 +189,8 @@ class AgentRunner:
                     return AgentRun(run_id="-", ok=False, error=f"auth failed: {exc}", auth=self.auth)
                 log.warning("subscription auth unavailable (%s); switching to the API key for the rest of this run", exc)
                 self.auth = "api_key"
+                self.ledger.release(worst_case_usd)       # the first attempt is already in the ledger:
+                self.ledger.reserve(worst_case_usd, purpose)  # re-check the cap before spending again
                 return await self._run_once(prompt, kind, purpose, system_prompt, schema, tools or [], mcp_servers,
                                             allowed_tools or [], hooks, max_turns, worst_case_usd, timeout_s, meta)
         finally:
@@ -191,6 +206,7 @@ class AgentRunner:
                   system_prompt=system_prompt, prompt=prompt, tools=tools, allowed_tools=allowed_tools, meta=meta or {})
         pending: dict[str, ToolEvent] = {}
         partial_usage: dict[str, Any] | None = None
+        usage_by_message: dict[str, dict[str, Any]] = {}  # AssistantMessage.usage is per message: sum unique ids
         result: ResultMessage | None = None
         fallback_reason: str | None = None
         start = time.monotonic()
@@ -205,7 +221,7 @@ class AgentRunner:
                         if msg.error in AUTH_FAILURE_ERRORS:
                             fallback_reason = msg.error
                         if msg.usage:
-                            partial_usage = msg.usage
+                            usage_by_message[msg.message_id or str(len(usage_by_message))] = msg.usage
                         for block in msg.content:
                             if isinstance(block, TextBlock):
                                 run.text += block.text
@@ -259,7 +275,8 @@ class AgentRunner:
                 run.error = f"{result.subtype}: {' '.join(result.errors or [])[:300]}"
             run.cost_usd = self._record(run, purpose, result.usage, result.total_cost_usd, kind)
         else:
-            run.usage = partial_usage                  # timed out / crashed: charge what we saw
+            partial_usage = _sum_usage(usage_by_message.values())   # timed out / crashed: charge every message
+            run.usage = partial_usage
             run.cost_usd = self._record(run, purpose, partial_usage, None, kind)
         llm_event("result", run.run_id, ok=run.ok, subtype=run.subtype, structured=run.structured, error=run.error,
                   cost_usd=run.cost_usd, usage=run.usage, num_turns=run.num_turns, duration_s=run.duration_s)

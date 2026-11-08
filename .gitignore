@@ -38,3 +38,5 @@ Thumbs.db
 .vscode/
 .idea/
 results/dashboard.html
+budget_ledger.jsonl.lock
+data/sandbox-seccomp.bpf

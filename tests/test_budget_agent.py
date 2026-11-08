@@ -17,7 +17,7 @@ from claude_agent_sdk import (
 from pydantic import SecretStr
 
 from factcheck.pipeline.agent import AgentRunner
-from factcheck.pipeline.budget import BudgetExceeded, estimate_cost
+from factcheck.pipeline.budget import BudgetExceeded, BudgetLedger, estimate_cost
 
 SMOKE_USAGE = {"input_tokens": 2, "cache_creation_input_tokens": 1166, "cache_read_input_tokens": 0, "output_tokens": 83,
                "server_tool_use": {"web_search_requests": 0},
@@ -131,3 +131,19 @@ async def test_budget_refuses_before_calling(settings, ledger):
         await AgentRunner(settings, ledger, query_fn=fake_query).run("p", kind="x", purpose="t", system_prompt="s",
                                                                      schema={}, worst_case_usd=0.02)
     assert "options" not in seen                          # never reached the SDK
+
+
+def test_ledger_survives_concurrent_processes(tmp_path):
+    """4 processes x 50 appends to one ledger: every line must parse (regression for the 2026-11-08 corruption)."""
+    import subprocess
+    import sys
+
+    path = tmp_path / "ledger.jsonl"
+    code = ("import sys; from pathlib import Path; from factcheck.pipeline.budget import BudgetLedger; "
+            "led = BudgetLedger(Path(sys.argv[1]), 100.0)\n"
+            "for i in range(50): led.record(purpose='t', model='claude-haiku-5-5', auth='x', usage=None, "
+            "sdk_cost_usd=0.001, run_id=f'{sys.argv[2]}-{i}', extra={'pad': 'x' * 300})")
+    procs = [subprocess.Popen([sys.executable, "-c", code, str(path), str(k)]) for k in range(4)]
+    assert all(p.wait(timeout=120) == 0 for p in procs)
+    led = BudgetLedger(path, 100.0)
+    assert len(led._rows()) == 200 and led.spent_total() == pytest.approx(0.2)

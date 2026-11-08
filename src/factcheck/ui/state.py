@@ -74,6 +74,11 @@ class UiState(QObject):
             self.stale.update(s for s in self.layouts if s.startswith("screen:"))   # whole-screen boxes go stale too
         else:
             return
+        if len(self.order) > 1000:                       # bound memory and repaint cost in long sessions
+            for cid in self.order[:-800]:
+                self.claims.pop(cid, None)
+                self.verdicts.pop(cid, None)
+            self.order = self.order[-800:]
         self.changed.emit()
 
     def overlay_items(self) -> list[OverlayItem]:

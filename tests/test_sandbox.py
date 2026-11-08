@@ -101,3 +101,35 @@ def test_trim_keeps_head_and_tail():
     text = "A" * 50 + "B" * 50
     out = trim(text, 20)
     assert out.startswith("A" * 10) and out.endswith("B" * 10) and "omitted" in out
+
+
+async def test_vsock_is_blocked(ws):
+    """AF_VSOCK reaches Windows host services from WSL (found in code review); the seccomp filter must refuse it."""
+    res = await run_bash("python -c \"import socket\ntry:\n s = socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM); print('VSOCK-OPEN')\n"
+                         "except OSError as e: print('blocked', e.errno)\"", ws)
+    assert "VSOCK-OPEN" not in res.stdout and "blocked 97" in res.stdout, res.as_tool_text()
+
+
+async def test_ordinary_sockets_still_work_but_have_no_network(ws):
+    res = await run_bash("python -c \"import socket; s = socket.socket(); print('created')\"", ws)
+    assert "created" in res.stdout
+
+
+async def test_windows_executables_cannot_run(ws):
+    """WSL interop would run a Windows .exe placed in /work (e.g. downloaded by fetch_file) on the host."""
+    import shutil
+
+    shutil.copy(r"C:\Windows\System32\whoami.exe", ws.host_path / "whoami.exe")
+    res = await run_bash("chmod +x ./whoami.exe 2>/dev/null; ./whoami.exe && echo RAN-ON-WINDOWS", ws)
+    assert "RAN-ON-WINDOWS" not in res.stdout and "\\" not in res.stdout, res.as_tool_text()
+
+
+async def test_nested_user_namespaces_are_disabled(ws):
+    res = await run_bash("unshare -Ur true && echo NESTED-OK", ws)
+    assert "NESTED-OK" not in res.stdout, res.as_tool_text()
+
+
+async def test_huge_output_is_capped(ws):
+    cfg = replace(SandboxConfig(), timeout_s=4)
+    res = await run_bash("yes 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'", ws, cfg)
+    assert res.timed_out and len(res.stdout) < 20_000
