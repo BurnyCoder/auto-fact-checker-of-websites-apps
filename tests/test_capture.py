@@ -111,3 +111,13 @@ async def test_hotkey_capture_path_with_rendered_screen(settings, monkeypatch):
     assert layout["source_id"] == "screen:\\.\\DISPLAY9"
     assert any("Coffee" in c.span for c in claims)
     await service.stop()
+
+
+def test_merge_rows_joins_username_and_timestamp():
+    from factcheck.capture.layout import merge_rows
+    rows = merge_rows([line(72, 70, 70, "mike_92", h=17), line(150, 72, 100, "Today at 14:02", h=13),
+                       line(72, 96, 600, "did you know the wall is visible")])
+    assert [r.text for r in rows] == ["mike_92 Today at 14:02", "did you know the wall is visible"]
+    blocks = group_lines([line(72, 70, 70, "mike_92", h=17), line(150, 72, 100, "Today at 14:02", h=13),
+                          line(72, 96, 600, "did you know the wall is visible")])
+    assert len(blocks) == 1

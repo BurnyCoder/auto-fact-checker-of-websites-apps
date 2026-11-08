@@ -60,10 +60,10 @@ def card_html(claim, verdict) -> str:
             extra = " · not in agent's results" if s.in_trace is False else ""
             rows.append(f"<li>{_link(s.url, s.title)} <span style='color:#5f6368'>({e(s.supports)} · {badge}{extra})</span>"
                         + (f"<br><i>“{e(s.quote)}”</i>" if s.quote else "") + "</li>")
-        parts.append("<b>Sources</b><ul style='margin:0'>" + "".join(rows) + "</ul>")
+        parts.append("<div style='margin-top:6px'><b>Sources</b></div><ul style='margin:0'>" + "".join(rows) + "</ul>")
     if verdict.computations:
         comp = "<br>".join(f"<code>$ {e(c.command)}</code><br><code>{e(c.output[:400])}</code>" for c in verdict.computations)
-        parts.append(f"<b>Computations</b><br>{comp}")
+        parts.append(f"<div style='margin-top:6px'><b>Computations</b></div>{comp}")
     if verdict.flags:
         parts.append(f"<div style='color:#5f6368'>flags: {e(', '.join(verdict.flags))} · ${verdict.cost_usd:.4f}</div>")
     return "".join(parts)
