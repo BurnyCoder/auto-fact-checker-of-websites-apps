@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import re
 import socket
 import ssl
@@ -107,6 +108,15 @@ def safe_filename(name: str, url: str) -> str:
     return base[:100] or "download"
 
 
+def _save_exclusive(target: Path, data: bytes) -> Path:
+    """Write to a fresh name: never overwrite or follow a file, folder or link the agent created in /work."""
+    while target.exists() or target.is_symlink():
+        target = target.with_name(f"{target.stem}_{os.urandom(3).hex()}{target.suffix}")
+    with open(target, "xb") as fh:                          # "x": fail if it appeared in the meantime
+        fh.write(data)
+    return target
+
+
 @dataclass(frozen=True)
 class FetchResult:
     """Outcome of one download, rendered for the model by `as_tool_text`."""
@@ -160,7 +170,10 @@ async def fetch_file(url: str, filename: str, dest_dir: Path, policy: UrlPolicy 
                     final_url = str(resp.url)
     except (BlockedDestination, httpx.HTTPError, OSError, TimeoutError) as exc:
         return FetchResult(ok=False, url=url, error=f"{type(exc).__name__}: {exc}")
-    target.write_bytes(data)
+    try:
+        target = await asyncio.to_thread(_save_exclusive, target, data)   # up to 25 MB: keep the event loop free
+    except OSError as exc:
+        return FetchResult(ok=False, url=url, error=f"could not save file: {exc}")
     if ctype.startswith(TEXT_TYPES) or target.suffix.lower() in (".csv", ".json", ".txt", ".html", ".xml", ".md"):
         preview = data[:1500].decode("utf-8", errors="replace")
     else:

@@ -110,8 +110,12 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
         sender = asyncio.create_task(pump())
         try:
             while True:
-                msg = json.loads(await ws.receive_text())
-                await handle(msg, conn, ws)
+                try:
+                    msg = json.loads(await ws.receive_text())
+                except json.JSONDecodeError:
+                    continue                               # ignore malformed frames
+                if isinstance(msg, dict):
+                    await handle(msg, conn, ws)
         except (WebSocketDisconnect, RuntimeError):
             pass
         finally:

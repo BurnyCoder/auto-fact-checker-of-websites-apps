@@ -189,3 +189,16 @@ async def test_structured_output_failure_is_salvaged_from_evidence(scripted):
 def test_schema_requires_only_core_fields():
     from factcheck.pipeline.prompts import VERDICT_SCHEMA
     assert VERDICT_SCHEMA["required"] == ["label", "confidence", "confidence_reasoning", "explanation"]
+
+
+async def test_webfetch_hook_refuses_private_targets():
+    from factcheck.pipeline.verify import build_hooks
+    hooks = build_hooks(VerifyConfig(), {})
+    on_fetch = hooks["PreToolUse"][1].hooks[0]
+    for url in ("http://127.0.0.1:8765/ws", "http://192.168.1.1/admin", "http://localhost/", "http://[::1]/"):
+        out = await on_fetch({"tool_input": {"url": url}}, None, None)
+        assert out["hookSpecificOutput"]["permissionDecision"] == "deny", url
+
+
+def test_normalize_url_survives_broken_ipv6():
+    assert normalize_url("http://[2001:db8::1") == "http://[2001:db8::1"

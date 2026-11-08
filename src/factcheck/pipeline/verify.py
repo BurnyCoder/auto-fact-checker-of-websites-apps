@@ -60,6 +60,22 @@ def _deny(reason: str) -> dict:
                                    "permissionDecisionReason": reason}}
 
 
+async def _private_target(url: str) -> str | None:
+    """Reason string if `url` points at a non-public address (localhost, LAN, link-local, WSL host), else None."""
+    from urllib.parse import urlsplit
+
+    from factcheck.pipeline.fetchfile import BlockedDestination, resolve_public
+
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        await resolve_public(host, port)
+    except (BlockedDestination, ValueError, OSError) as exc:
+        return f"non-public destination ({exc})"
+    return None
+
+
 def build_hooks(cfg: VerifyConfig, counters: dict[str, int]) -> dict:
     """PreToolUse hooks: cap WebSearch/WebFetch calls and enforce the URL policy (hooks doc:
     https://code.claude.com/docs/en/agent-sdk/hooks.md). `on_failure="block"` makes a crashing hook deny."""
@@ -81,7 +97,8 @@ def build_hooks(cfg: VerifyConfig, counters: dict[str, int]) -> dict:
         counters["WebFetch"] = counters.get("WebFetch", 0) + 1
         if counters["WebFetch"] > cfg.max_fetches:
             return _deny(f"page-fetch limit reached ({cfg.max_fetches})")
-        reason = cfg.policy.check(str((input_data.get("tool_input") or {}).get("url", "")))
+        url = str((input_data.get("tool_input") or {}).get("url", ""))
+        reason = cfg.policy.check(url) or await _private_target(url)
         return _deny(f"URL not allowed: {reason}") if reason else {}
 
     return {"PreToolUse": [HookMatcher(matcher="WebSearch", hooks=[on_search], on_failure="block"),
@@ -176,7 +193,8 @@ async def verify_claim(claim: Claim, runner: AgentRunner, cfg: VerifyConfig, *, 
         if fixed is not None:
             verdict = fixed
             flags.append("repaired")
-        remaining = [parse_error] if fixed is None else rule_violations(verdict, require_sources=cfg.web)
+        remaining = (problems + [f"repair failed: {parse_error or 'no answer'}"]) if fixed is None else \
+            rule_violations(verdict, require_sources=cfg.web)
         if verdict is None:
             v = failed_verdict(claim, f"invalid verdict: {parse_error}")
             v.cost_usd = total_cost
