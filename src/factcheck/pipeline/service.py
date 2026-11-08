@@ -45,7 +45,8 @@ class FactCheckService:
         self._workers: list[asyncio.Task] = []
         self.verify_cfg = VerifyConfig(max_searches=settings.max_web_searches, max_fetches=settings.max_web_fetches,
                                        max_turns=settings.max_turns, keep_work=settings.keep_agent_work,
-                                       timeout_s=settings.verify_timeout_s)
+                                       timeout_s=settings.verify_timeout_s,
+                                       verify_quotes=not settings.factcheck_fake_llm)  # fake sources need no re-fetch
 
     # ------------------------------------------------------------------ lifecycle
     def start(self) -> None:
