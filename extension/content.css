@@ -1,0 +1,9 @@
+/* content.css — how claims are underlined. Names match the Highlight objects registered in content.js.
+   ::highlight() supports color, background-color and text-decoration
+   (https://developer.mozilla.org/en-US/docs/Web/CSS/::highlight). Colours match the desktop overlay. */
+::highlight(fc-refuted)     { text-decoration: underline wavy #d93025 2px; background-color: rgba(217, 48, 37, 0.10); }
+::highlight(fc-conflicting) { text-decoration: underline wavy #f0a400 2px; background-color: rgba(240, 164, 0, 0.12); }
+::highlight(fc-supported)   { text-decoration: underline solid #2e9d4f 2px; }
+::highlight(fc-nee)         { text-decoration: underline dashed #80868b 2px; }
+::highlight(fc-checking)    { text-decoration: underline dotted #1a73e8 2px; }
+::highlight(fc-pending)     { text-decoration: underline dotted #9aa0a6 1px; }
