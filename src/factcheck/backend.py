@@ -15,7 +15,8 @@ import asyncio
 import concurrent.futures
 import logging
 import threading
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import uvicorn
 
