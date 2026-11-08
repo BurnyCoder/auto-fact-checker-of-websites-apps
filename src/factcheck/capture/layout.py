@@ -13,10 +13,30 @@ from factcheck.models import Box, TextBlock
 from factcheck.pipeline.extract import align_span
 
 
+def merge_rows(lines: list[OcrLine]) -> list[OcrLine]:
+    """Merge OCR lines that sit on the same row and nearly touch (e.g. 'mike_92' + 'Today at 14:02'):
+    Windows OCR splits a visual line where there is a wide gap, which would orphan a username from its message."""
+    rows: list[OcrLine] = []
+    for ln in sorted(lines, key=lambda ln: (ln.box.y, ln.box.x)):
+        for i, row in enumerate(rows):
+            b, r = ln.box, row.box
+            same_row = abs((b.y + b.h / 2) - (r.y + r.h / 2)) < 0.5 * max(b.h, r.h)
+            near = 0 <= b.x - (r.x + r.w) < 3 * max(b.h, r.h)
+            if same_row and near:
+                text = f"{row.text} {ln.text}"
+                x0, y0 = r.x, min(r.y, b.y)
+                x1, y1 = b.x + b.w, max(r.y + r.h, b.y + b.h)
+                rows[i] = OcrLine(text=text, box=Box(x=x0, y=y0, w=x1 - x0, h=y1 - y0, text=text))
+                break
+        else:
+            rows.append(ln)
+    return rows
+
+
 def group_lines(lines: list[OcrLine], prefix: str = "d") -> list[TextBlock]:
     """Group lines into blocks: next line joins the block if it starts within ~1.2 line heights below and
     its left edge is roughly aligned (or it overlaps horizontally). Reading order: top-to-bottom, left-to-right."""
-    ordered = sorted(lines, key=lambda ln: (round(ln.box.y / 4), ln.box.x))
+    ordered = sorted(merge_rows(lines), key=lambda ln: (round(ln.box.y / 4), ln.box.x))
     blocks: list[list[OcrLine]] = []
     for line in ordered:
         placed = False

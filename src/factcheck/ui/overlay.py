@@ -72,19 +72,23 @@ class ScreenOverlay(QWidget):
             fill = QColor(colour)
             fill.setAlpha(28 if item.label in ("Refuted", "Conflicting Evidence/Cherrypicking") else 0)
             painter.setBrush(fill)
-            first = None
+            first = last = None
             for b in item.boxes:
                 if not (mx <= b.x < mx + mw and my <= b.y < my + mh):
                     continue                                    # this box lives on another monitor
                 rect = QRectF((b.x - mx) / dpr - 2, (b.y - my) / dpr - 1, b.w / dpr + 4, b.h / dpr + 2)
                 painter.drawRoundedRect(rect, 3, 3)
                 first = first or rect
+                last = rect
             if first is not None:
                 tag = SHORT.get(item.label, "Checking…" if item.status == "checking" else "Not checked")
                 if item.confidence is not None:
                     tag += f" {round(item.confidence * 100)}%"
                 tw = painter.fontMetrics().horizontalAdvance(tag) + 8
-                tag_rect = QRectF(first.left(), max(0.0, first.top() - 15), tw, 14)
+                if last.right() + 6 + tw < self.width():       # prefer the right of the claim: keeps text above readable
+                    tag_rect = QRectF(last.right() + 6, last.center().y() - 7, tw, 14)
+                else:
+                    tag_rect = QRectF(first.left(), max(0.0, first.top() - 15), tw, 14)
                 painter.fillRect(tag_rect, colour)
                 painter.setPen(QColor("white"))
                 painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, tag)

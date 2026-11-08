@@ -7,6 +7,7 @@ import os
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")   # the offscreen platform has no font database otherwise
 from PySide6.QtWidgets import QApplication
 
 from factcheck.capture.layout import group_lines
