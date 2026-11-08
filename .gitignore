@@ -1,0 +1,38 @@
+# --- Secrets: never commit (holds ANTHROPIC_API_KEY etc.) ---
+.env
+.env.*
+!.env.example
+
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# --- Runtime data produced by the app (local only, may contain screen text) ---
+logs/
+.agent-work/
+.agent-cwd/
+data/cache/
+*.sqlite
+*.sqlite-journal
+
+# --- Downloaded benchmark data (re-downloaded by eval/datasets.py; licences forbid nothing, but keep repo small) ---
+data/raw/
+
+# --- Node / extension tooling ---
+node_modules/
+extension/*.zip
+test-results/
+playwright-report/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

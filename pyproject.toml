@@ -1,0 +1,54 @@
+[project]
+name = "factcheck"
+version = "0.1.0"
+description = "Fact-check the claims you see in Chrome and desktop apps with a Claude Agent SDK agent"
+authors = [
+    { name = "BurnyCoder", email = "happymancz@email.cz" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "claude-agent-sdk>=0.2.177",
+    "fastapi>=0.162.2",
+    "httpx>=0.28.1",
+    "mss>=10.2.0",
+    "numpy>=2.5.4",
+    "pillow>=13.0.0",
+    "psutil>=7.2.2",
+    "pydantic>=2.14.3",
+    "pydantic-settings>=2.16.2",
+    "pysbd>=0.3.4",
+    "pyside6>=6.12.0",
+    "rapidfuzz>=3.14.6",
+    "trafilatura>=2.3.1",
+    "uvicorn[standard]>=0.54.0",
+    "winrt-runtime>=4.1.0",
+    "winrt-windows-foundation>=4!10.0.28000.2957",
+    "winrt-windows-foundation-collections>=4!10.0.28000.2957",
+    "winrt-windows-globalization>=4!10.0.28000.2957",
+    "winrt-windows-graphics-imaging>=4!10.0.28000.2957",
+    "winrt-windows-media-ocr>=4!10.0.28000.2957",
+    "winrt-windows-storage-streams>=4!10.0.28000.2957",
+]
+
+[project.scripts]
+factcheck = "factcheck:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+    "ruff>=0.17.4",
+]
+eval = [
+    "matplotlib>=3.11.2",
+    "pandas>=3.1.1",
+    "playwright>=1.64.1",
+    "pyarrow>=26.0.1",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "statsmodels>=0.15.0",
+]
