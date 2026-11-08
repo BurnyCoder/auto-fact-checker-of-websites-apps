@@ -249,6 +249,10 @@ async def run_experiment(exp: str, smoke: int | None, concurrency: int, split: s
                 log.error("budget stop: %s", exc)
                 stop.set()
                 return
+            except Exception as exc:
+                log.exception("task %s %s crashed", item.item_id, cond)
+                rec = {"gold": item.label, "pred": None, "confidence": 0.0, "correct": False, "cost_usd": 0.0,
+                       "error": f"{type(exc).__name__}: {exc}"[:300], "flags": ["crashed"], "verdict": None}
             append(exp_dir / f"{cond}.jsonl", {"item_id": item.item_id, "condition": cond, "repeat": rep,
                                                "sdk_version": SDK_VERSION, "wall_s": round(time.monotonic() - t0, 1),
                                                "ts": datetime.now().isoformat(timespec="seconds"), **rec})
