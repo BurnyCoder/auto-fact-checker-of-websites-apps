@@ -153,8 +153,10 @@ VERDICT_SCHEMA: dict = {
             },
         },
     },
-    "required": ["label", "confidence", "confidence_reasoning", "explanation", "corrected_claim",
-                 "correction_confidence", "correction_reasoning", "sources", "computations"],
+    # Only the core fields are schema-required: in the pilot Haiku 5.5 sometimes omitted nullable fields
+    # (corrected_claim, ...) 5 times in a row and the whole check failed (3/75 runs). The correction / source rules
+    # are enforced in code instead (models.rule_violations + one repair pass).
+    "required": ["label", "confidence", "confidence_reasoning", "explanation"],
     "additionalProperties": False,
 }
 

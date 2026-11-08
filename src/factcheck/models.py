@@ -100,6 +100,7 @@ class Verdict(BaseModel):
     tool_counts: dict[str, int] = {}
     model: str = ""
     auth: str = ""
+    evidence: list[dict] = []            # compact tool trace (tool, input, urls, titles, output head) for audits
 
 
 def rule_violations(v: Verdict, require_sources: bool = True) -> list[str]:
