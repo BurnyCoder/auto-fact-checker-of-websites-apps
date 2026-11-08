@@ -31,7 +31,8 @@ dependencies = [
 ]
 
 [project.scripts]
-factcheck = "factcheck:main"
+factcheck = "factcheck.app:main"
+factcheck-cli = "factcheck.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
@@ -59,6 +60,10 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = ["network: needs internet access", "live: calls the real Claude API (costs money; opt-in)"]
 addopts = "-m 'not live'"
+filterwarnings = ["ignore::SyntaxWarning:pysbd.*"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.uv]
+default-groups = ["dev", "eval"]      # `uv sync` installs test + evaluation tooling too

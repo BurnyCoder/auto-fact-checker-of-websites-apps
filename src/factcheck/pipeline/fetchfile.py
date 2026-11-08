@@ -88,7 +88,7 @@ def public_only_client(timeout_s: float) -> httpx.AsyncClient:
     `trust_env=False` stops system proxy settings from routing around the check.
     """
     transport = httpx.AsyncHTTPTransport(retries=0)
-    transport._pool = httpcore.AsyncConnectionPool(   # noqa: SLF001 - see docstring
+    transport._pool = httpcore.AsyncConnectionPool(
         ssl_context=ssl.create_default_context(cafile=certifi.where()),
         network_backend=PublicOnlyBackend(),
         http1=True,

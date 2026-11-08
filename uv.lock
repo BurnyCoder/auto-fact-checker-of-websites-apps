@@ -476,6 +476,7 @@ wheels = [
 name = "factcheck"
 version = "0.1.0"
 source = { editable = "." }
+default-groups = ["dev", "eval"]
 dependencies = [
     { name = "claude-agent-sdk" },
     { name = "fastapi" },

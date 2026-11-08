@@ -82,7 +82,7 @@ def local_server():
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802 - stdlib naming
+        def do_GET(self):
             if self.path == "/ok":
                 body = b"year,value\n2020,42\n"
                 self.send_response(200)
