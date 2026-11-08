@@ -62,6 +62,48 @@ def trim(text: str, limit: int) -> str:
     return f"{text[:half]}\n... [{len(text) - limit} characters omitted] ...\n{text[-half:]}"
 
 
+def seccomp_program() -> bytes:
+    """Classic-BPF seccomp filter (raw `struct sock_filter[]`, the format `bwrap --seccomp FD` reads).
+
+    Why: `--unshare-all` removes TCP/IP but NOT AF_VSOCK; the code review (2026-11-08) showed a sandboxed process
+    could connect to a vsock service on the Windows host, and WSL's interop (running Windows .exe files) also rides on
+    host channels. This filter makes socket(AF_VSOCK, ...) fail with EAFNOSUPPORT, kills any non-x86-64 syscall ABI,
+    and refuses x32-ABI syscall numbers (which could otherwise bypass the socket check).
+    Layout of struct seccomp_data: nr @0, arch @4, args[0] @16 (https://man7.org/linux/man-pages/man2/seccomp.2.html).
+    """
+    import struct
+
+    LD_W_ABS, JEQ_K, JGE_K, RET_K = 0x20, 0x15, 0x35, 0x06
+    AUDIT_ARCH_X86_64, X32_BIT, NR_SOCKET, AF_VSOCK, EAFNOSUPPORT = 0xC000003E, 0x40000000, 41, 40, 97
+    RET_ERRNO, RET_ALLOW, RET_KILL_PROCESS = 0x00050000, 0x7FFF0000, 0x80000000
+    prog = [
+        (LD_W_ABS, 0, 0, 4),                       # 0: A = arch
+        (JEQ_K, 0, 7, AUDIT_ARCH_X86_64),          # 1: arch == x86_64 ? 2 : 9 (kill)
+        (LD_W_ABS, 0, 0, 0),                       # 2: A = syscall nr
+        (JGE_K, 5, 0, X32_BIT),                    # 3: nr >= x32 bit ? 9 (kill) : 4
+        (JEQ_K, 0, 3, NR_SOCKET),                  # 4: nr == socket ? 5 : 8 (allow)
+        (LD_W_ABS, 0, 0, 16),                      # 5: A = args[0] (domain, low 32 bits)
+        (JEQ_K, 0, 1, AF_VSOCK),                   # 6: domain == AF_VSOCK ? 7 : 8
+        (RET_K, 0, 0, RET_ERRNO | EAFNOSUPPORT),   # 7: fail the call
+        (RET_K, 0, 0, RET_ALLOW),                  # 8: allow
+        (RET_K, 0, 0, RET_KILL_PROCESS),           # 9: kill
+    ]
+    return b"".join(struct.pack("<HBBI", *ins) for ins in prog)
+
+
+def seccomp_file() -> str:
+    """Write the filter next to the project data and return its WSL path (read by bash outside the sandbox)."""
+    from factcheck.config import PROJECT_ROOT
+    from factcheck.pipeline.workspace import to_wsl_path
+
+    path = PROJECT_ROOT / "data" / "sandbox-seccomp.bpf"
+    path.parent.mkdir(exist_ok=True)
+    data = seccomp_program()
+    if not path.exists() or path.read_bytes() != data:
+        path.write_bytes(data)
+    return to_wsl_path(path)
+
+
 @functools.lru_cache(maxsize=1)
 def wsl_home() -> str:
     """The WSL user's home directory, asked once from WSL itself (e.g. /home/burny)."""
@@ -83,8 +125,13 @@ def build_command(cfg: SandboxConfig, work_wsl_path: str) -> list[str]:
     tools = resolve_tools_dir(cfg)
     return [
         "wsl.exe", "-e",                                # run a Linux program directly (no login shell)
+        # open the seccomp filter on fd 3 outside the sandbox, then exec bwrap with the remaining args verbatim
+        "bash", "-c", 'exec 3<"$1"; shift; exec "$@"', "fc-sandbox", seccomp_file(),
         "bwrap",
-        "--unshare-all",                                # new user/pid/net/ipc/uts/cgroup namespaces -> no network
+        "--seccomp", "3",                               # deny AF_VSOCK sockets and non-x86-64 ABIs (see seccomp_program)
+        "--unshare-all",                                # new user/pid/net/ipc/uts/cgroup namespaces -> no TCP/IP
+        "--unshare-user",                               # explicit (--unshare-all only *tries*); required by --disable-userns
+        "--disable-userns",                             # no nested user namespaces inside the sandbox
         "--die-with-parent",                            # sandbox dies if wsl.exe / our process dies
         "--new-session",                                # new terminal session: blocks TIOCSTI keystroke injection
         "--clearenv",                                   # start from an empty environment (no host secrets)
@@ -153,11 +200,30 @@ async def run_bash(script: str, ws: Workspace, cfg: SandboxConfig = DEFAULT_SAND
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
+    async def read_capped(stream, cap: int = 4 * 1024**2) -> bytes:
+        """Read a pipe to EOF but keep only head + tail (review finding: `yes` for 60 s must not fill RAM)."""
+        head, tail, total = bytearray(), bytearray(), 0
+        while chunk := await stream.read(65536):
+            total += len(chunk)
+            if len(head) < cap // 2:
+                head += chunk[: cap // 2 - len(head)]
+            tail = (tail + chunk)[-cap // 2:]
+        return bytes(head) if total <= cap // 2 else bytes(head) + b"\n...[output truncated]...\n" + bytes(tail)
+
+    async def interact():
+        proc.stdin.write(script.encode("utf-8"))
+        await proc.stdin.drain()
+        proc.stdin.close()
+        out_, err_ = await asyncio.gather(read_capped(proc.stdout), read_capped(proc.stderr))
+        await proc.wait()
+        return out_, err_
+
     try:
-        out, err = await asyncio.wait_for(proc.communicate(script.encode("utf-8")), timeout=cfg.timeout_s + 20)
+        out, err = await asyncio.wait_for(interact(), timeout=cfg.timeout_s + 20)
     except TimeoutError:
         proc.kill()                                     # backstop: kill wsl.exe; --die-with-parent ends bwrap
-        out, err = await proc.communicate()
+        await proc.wait()
+        out, err = b"", b"(sandbox killed by the outer timeout)"
     code = proc.returncode if proc.returncode is not None else -1
     timed_out = code in (124, 137, -9)                  # `timeout -s KILL` exits 137 (128 + SIGKILL)
     return SandboxResult(
