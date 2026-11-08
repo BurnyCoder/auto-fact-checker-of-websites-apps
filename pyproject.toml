@@ -52,3 +52,13 @@ eval = [
     "scipy>=1.18.1",
     "statsmodels>=0.15.0",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"                 # async test functions run without decorators (pytest-asyncio)
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["network: needs internet access", "live: calls the real Claude API (costs money; opt-in)"]
+addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 120
