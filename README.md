@@ -24,11 +24,46 @@ decomposition idea of [SAFE](https://arxiv.org/abs/2403.18802)) → one Haiku ag
 schema-enforced verdict → our code checks the verdict rules, that cited URLs appeared in the agent's own
 results, and that quotes really appear on the cited pages.
 
-**Results:** the benchmark evaluation (AVeriTeC, CheckThat! 2024) is preregistered in
-[`reports/preregistration.md`](reports/preregistration.md) before any confirmatory run; results will appear here once it has run.
-Early end-to-end runs: "The Great Wall of China is visible from the Moon" → *Refuted, 93 %* with a correction;
-"Everest is 8,849 m" → *Supported, 90 %*; "7 % a year doubles money in ~10 years" → *Supported, 93 %* from a
-sandbox computation (ln 2 / ln 1.07 = 10.24). These are demonstrations, not evidence of accuracy.
+## Results (preregistered evaluation)
+
+Benchmarks: [AVeriTeC](https://arxiv.org/abs/2305.13117) dev claims (real-world fact-checked claims, 4 labels) and [CLEF CheckThat! 2024](https://checkthat.gitlab.io/clef2024/task1) Task 1
+(check-worthiness). Hypotheses, metrics, sample sizes and decision rules were frozen in
+[`reports/preregistration.md`](reports/preregistration.md) (git tag `prereg-v1`) before any confirmatory run. The whole project ran
+on a $10 API-equivalent budget, which limited the web-search comparisons to 120 claims (minimum detectable effect
+13.5–17.5 accuracy points), so small effects show up as "inconclusive", not as "no effect".
+
+<!-- GEN:readme_results -->
+* **H1 — Web tools (fact-check sites blocked) vs answering from memory:** +21.7 accuracy points (95 % CI +11.7 to +30.8; n = 120; Holm-adjusted p < 0.001) → **supported**.
+* **H2 — Allowing existing fact-check sites vs blocking them:** +1.7 accuracy points (95 % CI -5.8 to +9.2; n = 120; Holm-adjusted p = 0.412) → not supported (inconclusive at this sample size).
+* **H3 — Reading the claim through rendering + Windows OCR vs exact text:** +0.8 points (one-sided 95 % lower bound -2.0; margin −3; n = 500; mean OCR character error rate 1.09 %) → **non-inferior**.
+* **H4 — Finding check-worthy sentences (CheckThat! 2024):** F1 0.759 vs best simple baseline 0.424 (Holm-adjusted p < 0.001) → **supported**.
+* **Confidence calibration (product setting):** mean stated confidence 78.5 % vs accuracy 71.7 %; Brier 0.157, ECE 0.104.
+* **Run-to-run variance (E2):** Fleiss' κ = 0.68 across 3 runs; same label in all runs for 68.0 % of claims.
+* **Corrections (E3):** of 87 corrections, the judge found 45 consistent with the professional fact-check, 33 partially, 3 contradicting, and 6 where the professional verdict says the claim was true.
+<!-- /GEN:readme_results -->
+
+<!-- GEN:eval_table -->
+| Role | System | Benchmark | Metric | Score |
+|---|---|---|---|---|
+| Baseline | Always 'Refuted' (majority class) | AVeriTeC dev sample (n = 120) | accuracy | 60.8 % |
+| Baseline | Uniform random label | AVeriTeC dev sample | accuracy | 25.0 % (expected) |
+| Control (no retrieval) | Closed-book (no web) | AVeriTeC dev sample | accuracy / macro-F1 | 48.3 % / 41.6 % |
+| Ablation (no fact-check sites) | Web, fact-check sites blocked | AVeriTeC dev sample | accuracy / macro-F1 | 70.0 % / 53.0 % |
+| **Method (product)** | Web, default (product) | AVeriTeC dev sample | accuracy / macro-F1 | 71.7 % / 50.9 % |
+| Control (ideal capture) | Clean text → extract → closed-book verify | AVeriTeC dev (n = 500) | accuracy | 49.0 % |
+| **Method (screen path)** | Rendered → OCR → extract → closed-book verify | AVeriTeC dev (n = 500) | accuracy | 49.8 % |
+| **Method** | Product extractor | CheckThat! 2024 T1 EN test (n = 341) | F1 | 0.759 |
+| Baseline | Number/quantity heuristic | CheckThat! 2024 T1 EN test | F1 | 0.424 |
+| Baseline | All positive | CheckThat! 2024 T1 EN test | F1 | 0.410 |
+| Control | Stratified random | CheckThat! 2024 T1 EN test | F1 | 0.256 |
+<!-- /GEN:eval_table -->
+
+In plainer words: see [`reports/summary.md`](reports/summary.md). Full reports: [retrieval vs memory](reports/exp-02-h1-h2-retrieval.md) ·
+[OCR channel](reports/exp-03-h3-ocr.md) · [check-worthiness](reports/exp-04-h4-checkworthiness.md) ·
+[variance](reports/exp-05-e2-variance.md) · [corrections](reports/exp-06-e3-corrections.md) · [paper](reports/paper/paper.pdf) ·
+[interactive explorer](https://burnycoder.github.io/fact-check-websites-apps/).
+
+![Accuracy by condition](reports/figures/confirmatory_accuracy.png)
 
 ---
 
@@ -131,8 +166,8 @@ Tray menu: pause, check screen now, switch trigger/display modes, copy extension
 * Not captured: blocked apps (password managers by default), our own windows, incognito/private windows, and Chrome
   windows while the extension handles them. Pause any time from the tray.
 * Screen text is untrusted: the agent has no access to your files or shell. Its only code execution is an
-  **offline** bubblewrap sandbox in WSL2 that sees nothing but `/usr`, a read-only tools folder and the claim's own
-  `/work` folder; downloads go through our SSRF-safe `fetch_file`. Escape attempts are covered by tests
+  **offline** bubblewrap sandbox in WSL2 (no TCP/IP, AF_VSOCK blocked by seccomp, no Windows-exe interop) that sees
+  nothing but `/usr`, a read-only tools folder and the claim's own `/work` folder; downloads go through our SSRF-safe `fetch_file`. Escape attempts are covered by tests
   (`tests/test_sandbox.py`, `tests/test_fetchfile_policy.py`).
 * Your global Claude Code configuration (CLAUDE.md, hooks, skills, MCP servers, connectors) is not loaded into the
   agent.
