@@ -186,10 +186,11 @@ def test_ledger_survives_concurrent_processes(tmp_path):
 
 
 def test_defaults_check_only_on_request_with_a_20_usd_cap(monkeypatch):
-    """User decision (2026-11-13): fact-check only when the button / shortcut is pressed; project cap $20."""
+    """User decisions (2026-11-13): fact-check only when the button / shortcut is pressed; project cap $20; $10/day."""
     from factcheck.config import Settings
 
-    for var in ("FACTCHECK_MODE", "TOTAL_BUDGET_USD"):
+    for var in ("FACTCHECK_MODE", "TOTAL_BUDGET_USD", "DAILY_APP_BUDGET_USD"):
         monkeypatch.delenv(var, raising=False)
     s = Settings(_env_file=None)
     assert s.factcheck_mode == "hotkey" and s.total_budget_usd == 20.0
+    assert s.daily_app_budget_usd == 10.0                 # "budget reached ... make it $10" (was 1)

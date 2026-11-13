@@ -162,7 +162,7 @@ copy .env.example .env
      `chrome://extensions`; reload open tabs, or just press the shortcut there (the extension re-attaches itself).
 * **Budget:** `TOTAL_BUDGET_USD` (default 20) is one cap for everything recorded in `budget_ledger.jsonl`, including
   the development and benchmark spend of this repo. `DAILY_APP_BUDGET_USD`
-  (default 1) caps the app per day, and each check first reserves its worst case ($0.21). When the cap is used up,
+  (default 10) caps the app per day, and each check first reserves its worst case ($0.21). When the cap is used up,
   the hover card says "Couldn't check: daily app budget … reached": raise the value in `.env` and restart the app.
   The default `FACTCHECK_MODE=hotkey` checks only when you press `Ctrl+Alt+F`; `continuous|both` check new text in
   every window you look at (chat apps included) and use the cap fastest.
