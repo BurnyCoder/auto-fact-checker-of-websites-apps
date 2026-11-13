@@ -145,12 +145,20 @@ def test_check_part_uses_the_selected_paragraphs(tmp_path, backend, page_server)
         # the 2nd paragraph has no number, so the fake extractor finds no claim there: only the 3rd shows; before the
         # fix the 1st paragraph and the list item (outside the selection) were checked as well ([1, 3, 4])
         assert page.evaluate(CHECKED_PARTS) == [3]
+        assert "from your selection" in page.evaluate(TOAST)           # says which part is being checked
+        assert page.evaluate("() => getSelection().isCollapsed")       # the selection is used up once checked
         page.evaluate("""() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('p b'));
                                  getSelection().removeAllRanges(); getSelection().addRange(r); }""")
         ask_tab(worker, page, "checkPart")                             # Alt+Shift+S on "330 metres"
         page.wait_for_function(f"({CHECKED_PARTS})().includes(1)", timeout=20000)
         assert page.evaluate(CHECKED_PARTS) == [1, 3]                  # its whole paragraph, never the list item
         assert not page.evaluate(PICKING)                              # text was selected: no box picker
+        # Regression (user, 2026-11-13: "Alt+Shift+S doesn't work" without a selection): the old selection stayed, so
+        # the next press silently re-checked it (same blocks twice in the log) instead of opening the box picker.
+        ask_tab(worker, page, "checkPart")
+        page.wait_for_function(PICKING, timeout=5000)
+        ask_tab(worker, page, "checkPart")                             # pressing it again closes the picker
+        page.wait_for_function(f"!({PICKING})()", timeout=5000)
 
 
 def test_check_part_drag_a_box(tmp_path, backend, page_server):
