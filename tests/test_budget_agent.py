@@ -17,7 +17,7 @@ from claude_agent_sdk import (
 from pydantic import SecretStr
 
 from factcheck.pipeline.agent import AgentRunner
-from factcheck.pipeline.budget import BudgetExceeded, BudgetLedger, estimate_cost
+from factcheck.pipeline.budget import BudgetBusy, BudgetExceeded, BudgetLedger, estimate_cost
 
 SMOKE_USAGE = {"input_tokens": 2, "cache_creation_input_tokens": 1166, "cache_read_input_tokens": 0, "output_tokens": 83,
                "server_tool_use": {"web_search_requests": 0},
@@ -41,9 +41,30 @@ def test_ledger_hard_stop_and_daily_cap(ledger):
     with pytest.raises(BudgetExceeded):
         ledger.reserve(0.10, "eval")                      # 9.95 + 0.10 > 10
     ledger.reserve(0.04, "eval")                          # fits
-    with pytest.raises(BudgetExceeded):
+    with pytest.raises(BudgetBusy):
         ledger.reserve(0.02, "eval")                      # in-flight reservation counts too
     ledger.release(0.04)
+
+
+def app_row(ledger, cost):
+    ledger.record(purpose="app-verify", model="claude-haiku-5-5", auth="subscription", usage=None,
+                  sdk_cost_usd=cost, run_id=f"r{cost}")
+
+
+def test_daily_cap_busy_is_not_exhausted(ledger):
+    """Regression (2026-11-13, live Chrome test): $0.63 spent of a $1 daily cap, worst case $0.21 per check. The second
+    concurrent check used to fail with 'daily app budget reached' although only in-flight reservations blocked it."""
+    app_row(ledger, 0.63)
+    ledger.reserve(0.21, "app-verify")                    # 0.63 + 0.21 fits
+    with pytest.raises(BudgetBusy):                       # fits once the first call finishes: wait, don't fail
+        ledger.reserve(0.21, "app-verify")
+    ledger.release(0.21)
+    ledger.reserve(0.21, "app-verify")
+    ledger.release(0.21)
+    app_row(ledger, 0.20)                                 # 0.83 + 0.21 > 1: really exhausted
+    with pytest.raises(BudgetExceeded) as err:
+        ledger.reserve(0.21, "app-verify")
+    assert not isinstance(err.value, BudgetBusy) and "DAILY_APP_BUDGET_USD" in str(err.value)
 
 
 def test_ledger_uses_max_of_sdk_and_own_estimate(ledger):
@@ -131,6 +152,21 @@ async def test_budget_refuses_before_calling(settings, ledger):
         await AgentRunner(settings, ledger, query_fn=fake_query).run("p", kind="x", purpose="t", system_prompt="s",
                                                                      schema={}, worst_case_usd=0.02)
     assert "options" not in seen                          # never reached the SDK
+
+
+async def test_runner_waits_while_other_calls_hold_the_budget(settings, ledger):
+    import asyncio
+
+    ledger.total_cap = 0.03
+    ledger.reserve(0.02, "t")                             # another call in flight
+    fake_query, seen = make_stream(ok_result())
+    runner = AgentRunner(settings, ledger, query_fn=fake_query)
+    runner.budget_poll_s = 0.01
+    task = asyncio.create_task(runner.run("p", kind="x", purpose="t", system_prompt="s", schema={}, worst_case_usd=0.02))
+    await asyncio.sleep(0.1)
+    assert not task.done() and "options" not in seen      # queued, not failed and not yet spending
+    ledger.release(0.02)                                  # the other call finished
+    assert (await asyncio.wait_for(task, 2)).ok
 
 
 def test_ledger_survives_concurrent_processes(tmp_path):

@@ -54,8 +54,12 @@ one tool-less **repair** pass over the evidence already collected; if it still f
 Per call, cost = max(SDK `total_cost_usd`, own estimate). Own estimate = tokens × Haiku 5.5 prices
 ($0.10 in / $0.50 out / $0.20 1-h cache write / $0.01 cache read per MTok) + $0.01 per web search. Claude Code's
 WebSearch runs in a sub-request that is missing from `usage.server_tool_use` (observed live), so WebSearch tool
-calls in the trace are counted as a floor. Before each call `reserve()` refuses if
-ledger + in-flight reservations + the call's worst case would exceed `TOTAL_BUDGET_USD` (or the daily app cap).
+calls in the trace are counted as a floor. Before each call `reserve()` claims the call's worst case
+(verify: $0.21 with web search; extract and repair: $0.03). It raises `BudgetExceeded` when the recorded spend plus that
+worst case would exceed `TOTAL_BUDGET_USD` (or `DAILY_APP_BUDGET_USD` for `app-*` calls). It raises `BudgetBusy` when
+the call only lacks room because other in-flight calls still hold their reservations, and `AgentRunner` then waits
+for them to finish instead of failing. Without that distinction, auto-checks near the daily cap were refused and looked
+like unchecked claims (found in the live Chrome test, `reports/exp-00-development.md` #14).
 
 ## Desktop capture details (`capture/`)
 

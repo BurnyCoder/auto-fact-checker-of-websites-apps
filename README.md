@@ -152,8 +152,18 @@ copy .env.example .env
      `dkfijekfdkhfpkbidoifbdibdihhcgcp` (the local server only accepts that ID).
   4. On the card click *Details* → *Extension options*, paste the token (Ctrl+V) into *Extension token*, click *Save*;
      the status line should read "Connected to the local app ✓".
+  5. Open an article: claims get a dotted underline. Up to 3 claims from each newly visible part of the page
+     (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red / amber / grey as verdicts arrive. The rest wait for *Check this
+     claim* in the hover card. After editing `extension/`, click
+     the reload arrow on the extension's card in `chrome://extensions`.
 * **Budget:** `TOTAL_BUDGET_USD` (default 10) is one cap for everything recorded in `budget_ledger.jsonl`, including
-  the development and benchmark spend of this repo; raise it in `.env` before regular use.
+  the development and benchmark spend of this repo; raise it in `.env` before regular use. `DAILY_APP_BUDGET_USD`
+  (default 1) caps the app per day, and each check first reserves its worst case ($0.21). When the cap is used up,
+  the hover card says "Couldn't check: daily app budget … reached": raise the value in `.env` and restart the app.
+  `FACTCHECK_MODE=continuous|both` checks new text in every window you look at (chat apps included), so it uses the
+  cap fastest; `hotkey` checks only when you press `Ctrl+Alt+F`.
+
+![Live verdict card in Chrome on the Wikipedia "Golden Gate Bridge" article (real Haiku verdict, 2026-11-13)](docs/images/live-chrome-card.jpg)
 
 ## Use
 
