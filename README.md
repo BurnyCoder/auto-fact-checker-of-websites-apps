@@ -172,7 +172,9 @@ copy .env.example .env
      the status line should read "Connected to the local app ✓".
   5. Open an article and press `Alt+Shift+F` (or click the extension's toolbar button → *Check this page now*).
      Every claim found gets a dotted underline; the 3 most important (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red /
-     amber / grey as verdicts arrive, the rest wait for *Check this claim* in the hover card. Nothing is sent before you ask, unless
+     amber / grey as verdicts arrive, the rest wait for *Check this claim* in the hover card. *Check all N* there (or
+     *Check all claims on this page* in the toolbar popup, or *Check all claims (N)* at the top of the side panel)
+     presses every one of those buttons; each check costs about $0.02. Nothing is sent before you ask, unless
      you tick *Check pages automatically* in Options. If the app is not running, a message says so.
   6. After updating `extension/` (e.g. `git pull`), click the reload arrow on the extension's card in
      `chrome://extensions`; reload open tabs, or just press the shortcut there (the extension re-attaches itself).

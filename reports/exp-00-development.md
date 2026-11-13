@@ -14,6 +14,7 @@ live web pages — never the held-out evaluation data.
 | Desktop text | Windows.Media.Ocr via pywinrt | Built in, ~30 ms per image, word boxes for the overlay; `winocr` is unmaintained. UI Automation deferred (Electron apps expose sparse trees). |
 | Browser | MV3 extension, CSS Custom Highlight API, WebSocket from the service worker | No DOM edits; MV3 workers are killed after 30 s idle unless a WebSocket is active (Chrome 116+). |
 | Partial checks | Desktop: Snipping-Tool-style box picker (`Ctrl+Alt+R`, `ui/region.py`) → OCR of that rectangle only. Chrome: `Alt+Shift+S` checks the paragraphs a selection touches, or opens a box picker in the page | User request, 2026-11-13. In Chrome the box selects DOM blocks instead of OCR-ing the region, so the text is exact and underlines and hover cards keep working; one shortcut for both selection and box was the user's choice over two separate ones. |
+| Check all | Panel *Check all claims (N)*, hover-card *Check all N*, popup *Check all claims on this page*: press every *Check this claim* / *Try again* button | User request, 2026-11-13, after extraction stopped capping claims (#27); the count in the label shows how many checks (about $0.02 each) a click starts. Tests: `test_panel_check_all_presses_every_check_button`, `test_check_all_claims` |
 | Threading | Qt main thread + one asyncio Proactor thread | qasync/QtAsyncio break subprocesses on Windows; the SDK spawns one CLI per query. |
 
 ## Issues found by running the system, and their fixes
