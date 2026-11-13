@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Test page: parts that page checks skip</title></head>
+<body style="font: 16px/1.6 Georgia, serif; max-width: 680px; margin: 40px auto;">
+  <h1>Comments</h1>
+  <!-- a short comment (< 40 characters), like "Zhang et al. is just one guy /s" on Reddit: page checks skip it -->
+  <div data-part="short"><p>GPT-4 came out in 2023.</p></div>
+  <p data-part="long">The tower has 1,665 steps from the ground to the top platform, according to its operator.</p>
+  <!-- one block of more than 4,000 characters: page checks drop it whole; a pick sends only the picked text -->
+  <div data-part="huge" id="huge" style="height: 120px; overflow: auto;"></div>
+  <!-- text drawn on a canvas is not in the page at all -->
+  <canvas data-part="canvas" width="400" height="120" style="display: block; margin-top: 30px; border: 1px solid #ccc"></canvas>
+  <script>
+    const filler = "This sentence is only filler and carries no claim. ".repeat(50);
+    const huge = document.getElementById("huge");
+    huge.append(filler);
+    const span = document.createElement("span");
+    span.textContent = "The bridge opened in 1937 and is 2,737 metres long. ";
+    huge.append(span, filler);
+    const ctx = document.querySelector("canvas").getContext("2d");
+    ctx.font = "20px Georgia";
+    ctx.fillText("Drawn text: 8,849 metres high.", 10, 60);
+  </script>
+</body>
+</html>
