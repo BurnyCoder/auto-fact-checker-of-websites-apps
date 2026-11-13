@@ -194,6 +194,47 @@ def test_check_part_drag_a_box(tmp_path, backend, page_server):
         page.wait_for_function(f"({TOAST})().includes('No text to check in that part')", timeout=5000)
 
 
+def drag(page, x0, y0, x1, y1) -> None:
+    page.mouse.move(x0, y0)
+    page.mouse.down()
+    page.mouse.move(x1, y1, steps=4)
+    page.mouse.up()
+
+
+# data-part of the element around every verdict highlight on parts.html
+CHECKED_DATA_PARTS = ("() => [...new Set(['fc-supported','fc-refuted','fc-nee','fc-conflicting']"
+                      ".flatMap(k => [...(CSS.highlights.get(k) || [])])"
+                      ".map(r => r.startContainer.parentElement.closest('[data-part]').dataset.part))].sort()")
+
+
+def test_check_part_reads_short_and_huge_blocks(tmp_path, backend, page_server):
+    """User (2026-11-13): "No text to check in that part" although the box had text. Page checks skip blocks under 40
+    characters (Reddit has comments like "Zhang et al. is just one guy /s", 31) and drop blocks over 4,000 whole; a part
+    you pick yourself must still be checked. Text with no DOM (canvas) gets a message pointing to Ctrl+Alt+R."""
+    with extension_page(tmp_path, f"ws://127.0.0.1:{backend.port}/ws", backend.settings.server_token,
+                        f"{page_server}/parts.html", auto=False) as (worker, page):
+        ask_tab(worker, page, "checkPart")
+        page.wait_for_function(PICKING, timeout=5000)
+        r = page.evaluate("() => { const b = document.querySelector('[data-part=short] p').getBoundingClientRect();"
+                          " return [b.left, b.top, b.right, b.bottom]; }")
+        drag(page, r[0] - 4, r[1] - 3, r[2] + 4, r[3] + 3)                # a box around the 23-character comment
+        page.wait_for_function(f"({CHECKED_DATA_PARTS})().includes('short')", timeout=20000)
+        assert "in the box" in page.evaluate(TOAST)
+
+        page.evaluate("""() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#huge span'));
+                                 getSelection().removeAllRanges(); getSelection().addRange(r); }""")
+        ask_tab(worker, page, "checkPart")                                 # a sentence inside a 5,000-character block
+        page.wait_for_function(f"({CHECKED_DATA_PARTS})().includes('huge')", timeout=20000)
+        assert page.evaluate(CHECKED_DATA_PARTS) == ["huge", "short"]     # nothing else on the page
+
+        ask_tab(worker, page, "checkPart")
+        page.wait_for_function(PICKING, timeout=5000)
+        r = page.evaluate("() => { const b = document.querySelector('canvas').getBoundingClientRect();"
+                          " return [b.left, b.top, b.right, b.bottom]; }")
+        drag(page, r[0] + 5, r[1] + 5, r[2] - 5, r[3] - 5)
+        page.wait_for_function(f"({TOAST})().includes('Ctrl+Alt+R')", timeout=5000)   # canvas text is not in the page
+
+
 def test_hover_card_follows_dark_mode(tmp_path, backend, page_server):
     """User (2026-11-13): no white backgrounds in dark mode. The card follows prefers-color-scheme."""
     colours = "() => document.querySelector('#fc-card-host').dataset.debugCardColors"

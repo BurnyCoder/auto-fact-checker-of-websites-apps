@@ -27,6 +27,10 @@
                         "Conflicting Evidence/Cherrypicking": "#f0a400" };
   const SKIP = "script,style,noscript,textarea,input,select,button,code,pre,svg,nav,footer,[aria-hidden='true'],[contenteditable='true'],#fc-card-host";
   const MIN_CHARS = 40, MAX_CHARS = 4000, MAX_BLOCKS = 40;
+  // A part the user picks (selection or box) may be short: Reddit comments such as "Zhang et al. is just one guy /s"
+  // (31 characters) are under MIN_CHARS, which only exists to keep UI labels out of automatic page checks
+  // (user report "No text to check in that part", 2026-11-13).
+  const MIN_PICK_CHARS = 8;
 
   // One Highlight object per colour, registered once (names match ::highlight() rules in content.css).
   const HL = {};
@@ -75,8 +79,9 @@
   // ---------------------------------------------------------------------------- block collection
   // A block = the nearest non-inline ancestor of some text nodes; its text is ONLY those text nodes
   // (not nested blocks), so nested containers never duplicate text and offsets map 1:1 to Range positions.
-  // `keep(el, nodes)`, when given, limits the blocks to a part of the page (selected text or a dragged box).
-  function collectBlocks(onlyVisible, within = document.body, keep = null) {
+  // `keepNode(textNode)`, when given, limits the blocks to a part of the page the user picked (selected text or a
+  // dragged box): a block is kept if any of its text nodes is in the part.
+  function collectBlocks(onlyVisible, within = document.body, keepNode = null) {
     const displayCache = new Map();
     const isBlockish = (el) => {
       if (!displayCache.has(el)) displayCache.set(el, !/^(inline|contents)/.test(getComputedStyle(el).display));
@@ -101,14 +106,18 @@
       groups.get(el).push(walker.currentNode);
     }
     const out = [];
-    for (const [el, nodes] of groups) {
-      const text = nodes.map((n) => n.nodeValue).join("");
-      if (text.trim().length < MIN_CHARS || text.length > MAX_CHARS) continue;
+    for (let [el, nodes] of groups) {
+      if (keepNode && !nodes.some(keepNode)) continue;
+      let text = nodes.map((n) => n.nodeValue).join("");
+      if (keepNode && text.length > MAX_CHARS) {           // picked part of a huge block: send only the picked text
+        nodes = nodes.filter(keepNode);
+        text = nodes.map((n) => n.nodeValue).join("");
+      }
+      if (text.trim().length < (keepNode ? MIN_PICK_CHARS : MIN_CHARS) || text.length > MAX_CHARS) continue;
       if (onlyVisible) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.bottom < -200 || r.top > innerHeight + 200) continue;
       }
-      if (keep && !keep(el, nodes)) continue;
       let id = blockIdOf.get(el);
       if (!id) { id = `b${nextBlock++}`; blockIdOf.set(el, id); }
       blocks.set(id, { el, nodes });
@@ -133,7 +142,11 @@
     }
     const all = collectBlocks(onlyVisible, within, keep);
     const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
-    if (!fresh.length) { if (force) toast(keep ? "No text to check in that part" : "No text to check on this page"); return 0; }
+    if (!fresh.length) {
+      if (force) toast(keep ? "No text to check in that part. Text in frames, images or canvases is not part of the page; "
+                              + "Ctrl+Alt+R reads it from the screen." : "No text to check on this page");
+      return 0;
+    }
     for (const b of fresh) sentTexts.set(b.id, b.text);
     post({ type: "submit", title: document.title, url: location.href, blocks: fresh, auto: autoMode || force, force });
     return fresh.length;
@@ -384,7 +397,7 @@
   // instead of every block under the selection's common ancestor, which for a multi-paragraph selection was the
   // whole article (e2e test, 2026-11-13).
   function checkRange(range) {
-    return submit(true, false, document.body, (_el, nodes) => nodes.some((n) => range.intersectsNode(n)));
+    return submit(true, false, document.body, (n) => range.intersectsNode(n));
   }
 
   const paragraphs = (n) => `${n} paragraph${n === 1 ? "" : "s"}`;
@@ -400,12 +413,23 @@
     return true;
   }
 
-  // True when any line box of a text node overlaps the box (client coordinates;
-  // https://developer.mozilla.org/en-US/docs/Web/API/Range/getClientRects).
+  // True when a line box of a text node overlaps the box AND that text is what is shown there (client coordinates;
+  // https://developer.mozilla.org/en-US/docs/Web/API/Range/getClientRects). Line boxes are not clipped: text
+  // scrolled out of a scroll container, or covered by a sticky header or pop-up, still has rects under the box
+  // (e2e test: 5 hidden lines of a scrolled block lay behind a canvas). So the overlap's centre is hit-tested with
+  // document.elementFromPoint (https://developer.mozilla.org/en-US/docs/Web/API/Document/elementFromPoint); the
+  // picker layer is already hidden when this runs.
   function textTouches(node, box) {
     const r = document.createRange();
     r.selectNodeContents(node);
-    return [...r.getClientRects()].some((c) => c.right > box.left && c.left < box.right && c.bottom > box.top && c.top < box.bottom);
+    for (const c of r.getClientRects()) {
+      const left = Math.max(c.left, box.left), right = Math.min(c.right, box.right);
+      const top = Math.max(c.top, box.top), bottom = Math.min(c.bottom, box.bottom);
+      if (left >= right || top >= bottom) continue;
+      const hit = document.elementFromPoint((left + right) / 2, (top + bottom) / 2);
+      if (hit && node.parentElement.contains(hit)) return true;
+    }
+    return false;
   }
 
   const boxOf = (a, b) => ({ left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) });
@@ -448,7 +472,7 @@
     const b = boxOf(pickFrom, { x: e.clientX, y: e.clientY });
     stopPicker();
     if (b.right - b.left < PICK_MIN_PX || b.bottom - b.top < PICK_MIN_PX) return;
-    const n = submit(true, false, document.body, (_el, nodes) => nodes.some((n) => textTouches(n, b)));
+    const n = submit(true, false, document.body, (node) => textTouches(node, b));
     if (n) toast(`checking ${paragraphs(n)} in the box`);
   });
   pickEl.addEventListener("contextmenu", (e) => { e.preventDefault(); stopPicker(); });   // right-click cancels
