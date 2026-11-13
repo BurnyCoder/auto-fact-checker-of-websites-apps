@@ -118,3 +118,22 @@ def test_backend_stop_cancels_startup_tasks(settings):
     backend.start()
     backend.stop()
     assert cancelled.is_set()
+
+
+def test_disconnect_log_names_the_close_code(client, caplog):
+    """Short connect/disconnect pairs were seen in the live test; the close code tells who closed and why."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="factcheck.server.api"):
+        with client.websocket_connect(WS, headers={"origin": ORIGIN}) as ws:
+            ws.send_text(json.dumps({"type": "auth", "token": client.settings.server_token}))
+            assert json.loads(ws.receive_text())["type"] == "hello"
+            ws.close(code=1001)
+        client.portal.call(asyncio_sleep_briefly)
+    assert any("extension disconnected (code 1001" in r.getMessage() for r in caplog.records)
+
+
+async def asyncio_sleep_briefly():
+    import asyncio
+
+    await asyncio.sleep(0.2)
