@@ -76,10 +76,14 @@ in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-
     (no DOM edits), hover card with full verdict. Checks start only when you ask: toolbar button *Check this page
     now*, `Alt+Shift+F`, or right-click "Fact-check selected text" (automatic checking while reading is an option).
   * **Desktop OCR** (Windows.Media.Ocr): `Ctrl+Alt+F` or the tray's *Check screen now* checks everything on all
-    monitors; the optional continuous mode checks the foreground window when it settles. Lines are grouped into messages/paragraphs before extraction.
+    monitors, except windows it must not read (the app's own panel, blocked apps, private windows, and Chrome while
+    the extension handles it), which are blacked out before OCR; the optional continuous mode checks the foreground
+    window when it settles. Lines are grouped into messages/paragraphs before extraction.
 * **Display**: per-monitor click-through **overlay** (colour = label, border width = confidence, tag "Refuted 93 %")
   and/or a **side panel** with label, confidence + reasoning, explanation, correction, sources (✓ quote found /
-  ✗ not found / not checked), sandbox computations, and a "Check this claim" button.
+  ✗ not found / not checked), sandbox computations, and a "Check this claim" button for claims beyond the first
+  3 that each check verifies automatically (`MAX_AUTO_CHECKS_PER_BATCH`). Screen boxes stay for 60 s after the last
+  verdict arrives.
 * **Agent tools**: built-in WebSearch + WebFetch; `fetch_file` (raw CSV/JSON/XLSX/PDF/HTML into a per-claim `/work`
   folder, public internet only, SSRF-safe); `bash` in an offline bubblewrap sandbox with every interpreter/compiler
   in WSL.
@@ -187,7 +191,8 @@ Tray menu: pause, check screen now, switch trigger/display modes, copy extension
 
 * Screen text is sent only to Anthropic (through the Agent SDK). Logs stay local and are gitignored.
 * Not captured: blocked apps (password managers by default), our own windows, incognito/private windows, and Chrome
-  windows while the extension handles them. Pause any time from the tray.
+  windows while the extension handles them; the whole-screen check blacks them out before OCR wherever they are on
+  top. Pause any time from the tray.
 * Screen text is untrusted: the agent has no access to your files or shell. Its only code execution is an
   **offline** bubblewrap sandbox in WSL2 (no TCP/IP, AF_VSOCK blocked by seccomp, no Windows-exe interop) that sees
   nothing but `/usr`, a read-only tools folder and the claim's own `/work` folder; downloads go through our SSRF-safe `fetch_file`. Escape attempts are covered by tests

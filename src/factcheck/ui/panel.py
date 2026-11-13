@@ -37,12 +37,15 @@ def _link(url: str, text: str) -> str:
     return f'<a href="{e(url, quote=True)}" style="color:{LINK}">{e(text or url)}</a>'
 
 
-def card_html(claim, verdict) -> str:
-    """Rich-text body of one card (pure function, unit-testable)."""
+def card_html(claim, verdict, auto_checks: int = 3) -> str:
+    """Rich-text body of one card (pure function, unit-testable). `auto_checks` = MAX_AUTO_CHECKS_PER_BATCH."""
     src = f"{e(claim.source.app)} — {e(claim.source.title)[:80]}"
     if verdict is None:
-        status = {"checking": "Checking…", "pending": "Not checked yet", "error": "Check failed"}.get(claim.status, claim.status)
-        return f"<div style='color:#5f6368'>{src}</div><b>{e(claim.text)}</b><div style='color:#5f6368'>{e(status)}</div>"
+        # "pending" = left over by the per-check cap; say so, or the card reads as stuck (user, 2026-11-13)
+        not_checked = f"Not checked yet: only the first {auto_checks} claims found are checked automatically. "                       "Press “Check this claim” below."
+        status = {"checking": "Checking…", "pending": not_checked, "error": "Check failed"}.get(claim.status, claim.status)
+        return (f"<div style='color:#5f6368'>{src}</div><div><b>{e(claim.text)}</b></div>"   # own block: Qt ran it
+                f"<div style='color:#5f6368'>{e(status)}</div>")                             # into the source line
     colour = LABEL_COLOURS[verdict.label]
     pct = round(verdict.confidence * 100)
     parts = [
@@ -74,13 +77,18 @@ def card_html(claim, verdict) -> str:
 
 
 class ClaimCard(QFrame):
-    def __init__(self, on_check: Callable[[str], None]):
+    def __init__(self, on_check: Callable[[str], None], auto_checks: int = 3):
         super().__init__()
+        self.auto_checks = auto_checks
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        # Text colour is set with the background: in Windows dark mode the inherited palette text is white, which
-        # made the card's text invisible on white (user screenshot, 2026-11-13).
+        # Colours are set with the background: in Windows dark mode the inherited palette text is white, which made
+        # the card's text (user screenshot) and its Check button (user: "I don't see button") invisible on white,
+        # 2026-11-13. A style sheet on the button replaces the windows11 style's dark-mode drawing of it.
         self.setStyleSheet("ClaimCard { background: white; border: 1px solid #dadce0; border-radius: 8px; }"
-                           f"ClaimCard QLabel {{ color: {TEXT}; background: transparent; }}")
+                           f"ClaimCard QLabel {{ color: {TEXT}; background: transparent; }}"
+                           f"ClaimCard QPushButton {{ color: {LINK}; background: white; border: 1px solid #dadce0;"
+                           " border-radius: 4px; padding: 4px 10px; font-weight: 600; }"
+                           "ClaimCard QPushButton:hover { background: #e8f0fe; }")
         layout = QVBoxLayout(self)
         self.label = QLabel()
         self.label.setWordWrap(True)
@@ -95,13 +103,15 @@ class ClaimCard(QFrame):
 
     def update_from(self, claim, verdict) -> None:
         self.claim_id = claim.id
-        self.label.setText(card_html(claim, verdict))
+        self.label.setText(card_html(claim, verdict, self.auto_checks))
         self.button.setVisible(verdict is None and claim.status in ("pending", "error"))
 
 
 class Panel(QWidget):
-    def __init__(self, state: UiState, on_check: Callable[[str], None], status_text: Callable[[], str]):
+    def __init__(self, state: UiState, on_check: Callable[[str], None], status_text: Callable[[], str],
+                 auto_checks: int = 3):
         super().__init__(None, Qt.WindowType.Window)
+        self.auto_checks = auto_checks
         self.setWindowTitle("Fact checks")
         self.resize(460, 760)
         self.state = state
@@ -129,7 +139,7 @@ class Panel(QWidget):
         for cid in self.state.order[-MAX_CARDS:]:
             card = self.cards.get(cid)
             if card is None:
-                card = ClaimCard(self.on_check)
+                card = ClaimCard(self.on_check, self.auto_checks)
                 self.cards[cid] = card
                 self.list.insertWidget(0, card)                 # newest on top
             card.update_from(self.state.claims[cid], self.state.verdicts.get(cid))

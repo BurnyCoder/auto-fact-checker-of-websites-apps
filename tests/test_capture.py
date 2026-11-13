@@ -83,6 +83,61 @@ def test_skip_rules(settings):
     assert "minimized" in cap.skip_reason(win(minimized=True))
 
 
+def test_skip_mask_follows_z_order():
+    """A pixel is left out only if the topmost window covering it is a skipped one (windows listed topmost first)."""
+    from factcheck.capture.watcher import skip_mask
+
+    win = lambda hwnd, x, y, w, h: winapi.WindowInfo(hwnd=hwnd, title="", pid=1, process="a.exe",
+                                                     rect=winapi.Rect(x, y, w, h), minimized=False)
+    top = win(1, 100, 100, 50, 50)           # normal window covering part of the skipped one
+    skipped = win(2, 80, 80, 100, 100)       # e.g. our own panel
+    bottom = win(3, 0, 0, 1000, 1000)        # e.g. the desktop
+    mask = skip_mask([top, skipped, bottom], winapi.Rect(0, 0, 200, 200), lambda w: w.hwnd == 2)
+    assert mask[90, 90] and mask[170, 170]   # visible part of the skipped window
+    assert not mask[120, 120]                # covered by the window above it
+    assert not mask[10, 10]                  # the desktop
+    offset = skip_mask([skipped], winapi.Rect(100, 100, 200, 200), lambda w: True)   # monitor not at the origin
+    assert offset[0, 0] and offset[79, 79] and not offset[80, 80]
+    overlay = winapi.WindowInfo(hwnd=4, title="", pid=1, process="nvidia overlay.exe", rect=winapi.Rect(0, 0, 200, 200),
+                                minimized=False, see_through=True)       # layered + never activated, e.g. GeForce
+    assert skip_mask([overlay, skipped], winapi.Rect(0, 0, 200, 200), lambda w: w.hwnd == 2)[90, 90]   # hides nothing
+    assert skip_mask([overlay, bottom], winapi.Rect(0, 0, 200, 200), lambda w: w.hwnd == 4)[10, 10]   # blocked: out
+
+
+def test_visible_windows_lists_real_windows():
+    wins = winapi.visible_windows()
+    assert wins and all(w.rect.width > 0 and w.rect.height > 0 and not w.minimized for w in wins)
+    assert len({w.hwnd for w in wins}) == len(wins)
+
+
+async def test_hotkey_capture_leaves_out_own_and_blocked_windows(settings, monkeypatch):
+    """Regression (2026-11-13 live check): the hotkey path OCR'd whole monitors, so it fact-checked our own panel; it
+    must black out the same windows continuous mode skips (own, blocked apps, private, Chrome with the extension)."""
+    import os
+
+    import factcheck.capture.watcher as watcher_mod
+
+    pixels = render([(20, 20, "Coffee is the second most traded commodity after oil."),
+                     (20, 120, "Panel says the Jacobian conjecture is false."),
+                     (20, 170, "Vault password hunter2 for the bank.")])
+    win = lambda pid, process, top: winapi.WindowInfo(hwnd=top, title="w", pid=pid, process=process,
+                                                      rect=winapi.Rect(0, top, 900, 45), minimized=False)
+    monkeypatch.setattr(watcher_mod.winapi, "monitors",
+                        lambda: [winapi.Monitor(device="\\.\\DISPLAY9", rect=winapi.Rect(0, 0, 900, 220), primary=True)])
+    monkeypatch.setattr(watcher_mod.winapi, "visible_windows",
+                        lambda: [win(os.getpid(), "python.exe", 110), win(4242, "keepass.exe", 160)])
+    monkeypatch.setattr(watcher_mod, "grab", lambda left, top, w, h: pixels)
+
+    class Service:                                   # only the layout matters here: no extraction
+        def emit(self, _e): pass
+        async def submit(self, *_a, **_kw): pass
+
+    cap = DesktopCapture(settings, Service(), extension_connected=lambda: False)
+    await cap.capture_now()
+    text = " ".join(b.text for b in cap.layouts["screen:\\.\\DISPLAY9"])
+    assert "Coffee" in text and "Jacobian" not in text and "hunter2" not in text
+
+
 async def test_hotkey_capture_path_with_rendered_screen(settings, monkeypatch):
     """capture_now on a fake 'monitor' (rendered image instead of a screenshot): OCR -> blocks -> service -> events."""
     import asyncio
@@ -96,6 +151,7 @@ async def test_hotkey_capture_path_with_rendered_screen(settings, monkeypatch):
     monkeypatch.setattr(watcher_mod.winapi, "monitors",
                         lambda: [winapi.Monitor(device="\\.\\DISPLAY9", rect=winapi.Rect(0, 0, 900, 220), primary=True)])
     monkeypatch.setattr(watcher_mod, "grab", lambda left, top, w, h: pixels)
+    monkeypatch.setattr(watcher_mod.winapi, "visible_windows", list)     # independent of the real desktop
     settings.factcheck_fake_llm = True
     service = FactCheckService(settings, FakeRunner(settings))
     events = []

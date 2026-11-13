@@ -89,3 +89,12 @@ like unchecked claims (found in the live Chrome test, `reports/exp-00-developmen
 * Overlay: each `ScreenOverlay` is matched to a monitor by device name (or size/position) and converts
   `local = (physical − monitor origin) / devicePixelRatio`. Windows are excluded from capture with
   `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`; `FACTCHECK_OVERLAY_DEBUG=1` keeps them visible to screenshots.
+* Hotkey capture reads whole monitors, so before OCR it blacks out every pixel whose topmost window must not be read
+  (own windows such as the side panel, blocked apps, private windows, Chrome while the extension is connected).
+  `winapi.visible_windows()` walks top-level windows in z-order (`GetTopWindow` + `GetWindow(GW_HWNDNEXT)`) and drops
+  hidden, minimized, DWM-cloaked and click-through (`WS_EX_TRANSPARENT`, e.g. our overlay) windows; `skip_mask`
+  paints their rectangles bottom-up so each pixel belongs to the topmost window. Layered windows that never take
+  focus (e.g. the GeForce overlay) may be transparent, so they never count as covering a window below them.
+  Continuous mode applies the same rules to the foreground window (`privacy_reason` + minimized/tiny).
+* Hotkey boxes stay for `SCREEN_LAYOUT_TTL_S` = 60 s after the screen's latest result (claims, status or verdict),
+  not after the capture: verdicts take 20–60 s. A 1 s timer in `UiState` removes expired layouts.
