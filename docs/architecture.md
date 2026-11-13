@@ -18,6 +18,9 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
 * **Triggers.** By default nothing leaves a page until the user asks: toolbar button *Check this page now*,
   `Alt+Shift+F` (`commands`), or the right-click item. *Check pages automatically* in Options restores the
   automatic mode (on load, scroll and DOM changes).
+* **Check all.** `checkAll()` posts a `check` for every claim on the page without a verdict that is not being
+  checked (the ones showing *Check this claim* or *Try again*); the hover card offers it when more than one is
+  waiting, the popup through `checkAllTab`. The side panel's *Check all claims (N)* does the same for its cards.
 * **No length limits.** A block is left out only when it has no text (user decision, 2026-11-13). The former
   40-character minimum and 4,000-character maximum dropped short comments and whole long X posts (one element,
   5,451 characters measured); the server no longer truncates blocks or caps their number either.

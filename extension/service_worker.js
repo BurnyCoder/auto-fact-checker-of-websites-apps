@@ -153,7 +153,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.type === "status") { connect().then(() => reply({ status: lastStatus })); return true; }
-  const ask = { checkTab: "checkPage", checkPartTab: "checkPart" }[msg?.type];    // popup buttons
+  const ask = { checkTab: "checkPage", checkPartTab: "checkPart", checkAllTab: "checkAll" }[msg?.type];   // popup buttons
   if (ask) { askTab(msg.tabId, { type: ask }).then(() => reply({ ok: true })); return true; }
   return false;
 });

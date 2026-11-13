@@ -1,4 +1,4 @@
-// popup.js — connection status, "Check this page now", "Check part of page…", and a link to Options.
+// popup.js — connection status, "Check this page now", "Check part of page…", "Check all claims on this page", Options.
 const $ = (id) => document.getElementById(id);
 
 chrome.runtime.sendMessage({ type: "status" }).then(({ status }) => {
@@ -12,4 +12,5 @@ async function askActiveTab(type) {        // the service worker injects the con
 }
 $("check").addEventListener("click", () => askActiveTab("checkTab"));
 $("part").addEventListener("click", () => askActiveTab("checkPartTab"));
+$("all").addEventListener("click", () => askActiveTab("checkAllTab"));
 $("options").addEventListener("click", () => chrome.runtime.openOptionsPage());

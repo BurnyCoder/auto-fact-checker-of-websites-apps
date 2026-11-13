@@ -159,6 +159,11 @@ class Panel(QWidget):
         outer = QVBoxLayout(self)
         self.header = QLabel()
         outer.addWidget(self.header)
+        # Presses every card's "Check this claim" / "Try again" button (user request, 2026-11-13); the count in the label
+        # shows how many checks (each about $0.02) one click starts.
+        self.check_all = QPushButton()
+        self.check_all.clicked.connect(self.check_all_unchecked)
+        outer.addWidget(self.check_all)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         inner = QWidget()
@@ -181,7 +186,19 @@ class Panel(QWidget):
             card.apply_theme(theme)
         self.refresh()                                          # re-renders each card's HTML with the new colours
 
+    def unchecked(self) -> list[str]:
+        """Claims showing a Check / Try again button: no verdict yet and not being checked."""
+        return [cid for cid in self.state.order[-MAX_CARDS:]
+                if cid not in self.state.verdicts and self.state.claims[cid].status in ("pending", "error")]
+
+    def check_all_unchecked(self) -> None:
+        for cid in self.unchecked():
+            self.on_check(cid)
+
     def refresh(self) -> None:
+        todo = len(self.unchecked())
+        self.check_all.setText(f"Check all claims ({todo})")
+        self.check_all.setVisible(todo > 0)
         for cid in self.state.order[-MAX_CARDS:]:
             card = self.cards.get(cid)
             if card is None:
