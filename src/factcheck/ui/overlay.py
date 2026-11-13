@@ -26,6 +26,16 @@ SHORT = {"Supported": "Supported", "Refuted": "Refuted", "Not Enough Evidence": 
          "Conflicting Evidence/Cherrypicking": "Cherry-picked"}
 
 
+def place_tag(first: QRectF, last: QRectF, width: float, screen_width: float, occupied: list[QRectF]) -> QRectF:
+    """Where to draw a claim's verdict tag: right of its last box if that spot is on screen and covers no other claim
+    or tag (keeps the text above readable), otherwise just above its first box. Before this check, with two claims on
+    one line the first claim's tag covered the second claim's text (README overlay demo, 2026-11-13)."""
+    right = QRectF(last.right() + 6, last.center().y() - 7, width, 14)
+    if right.right() < screen_width and not any(right.intersects(r) for r in occupied):
+        return right
+    return QRectF(first.left(), max(0.0, first.top() - 15), width, 14)
+
+
 def match_monitor(screen: QScreen, mons: list[winapi.Monitor]) -> winapi.Monitor | None:
     """Pair a QScreen with its physical monitor: by device name first, else by physical size + position order."""
     for m in mons:
@@ -62,7 +72,15 @@ class ScreenOverlay(QWidget):
         mx, my, mw, mh = self.monitor.rect.left, self.monitor.rect.top, self.monitor.rect.width, self.monitor.rect.height
         font = QFont("Segoe UI", 8, QFont.Weight.DemiBold)
         painter.setFont(font)
+        # local rectangles of every claim on this monitor first, so a tag can avoid all of them
+        laid_out = []
         for item in self.state.overlay_items():
+            rects = [QRectF((b.x - mx) / dpr - 2, (b.y - my) / dpr - 1, b.w / dpr + 4, b.h / dpr + 2)
+                     for b in item.boxes if mx <= b.x < mx + mw and my <= b.y < my + mh]   # skip other monitors' boxes
+            if rects:
+                laid_out.append((item, rects))
+        occupied = [r for _, rects in laid_out for r in rects]
+        for item, rects in laid_out:
             colour = QColor(LABEL_COLOURS.get(item.label, "#1a73e8"))
             width = 1.5 + 3.0 * (item.confidence or 0.0)        # border strength scales with confidence
             pen = QPen(colour, width)
@@ -72,26 +90,17 @@ class ScreenOverlay(QWidget):
             fill = QColor(colour)
             fill.setAlpha(28 if item.label in ("Refuted", "Conflicting Evidence/Cherrypicking") else 0)
             painter.setBrush(fill)
-            first = last = None
-            for b in item.boxes:
-                if not (mx <= b.x < mx + mw and my <= b.y < my + mh):
-                    continue                                    # this box lives on another monitor
-                rect = QRectF((b.x - mx) / dpr - 2, (b.y - my) / dpr - 1, b.w / dpr + 4, b.h / dpr + 2)
+            for rect in rects:
                 painter.drawRoundedRect(rect, 3, 3)
-                first = first or rect
-                last = rect
-            if first is not None:
-                tag = SHORT.get(item.label, "Checking…" if item.status == "checking" else "Not checked")
-                if item.confidence is not None:
-                    tag += f" {round(item.confidence * 100)}%"
-                tw = painter.fontMetrics().horizontalAdvance(tag) + 8
-                if last.right() + 6 + tw < self.width():       # prefer the right of the claim: keeps text above readable
-                    tag_rect = QRectF(last.right() + 6, last.center().y() - 7, tw, 14)
-                else:
-                    tag_rect = QRectF(first.left(), max(0.0, first.top() - 15), tw, 14)
-                painter.fillRect(tag_rect, colour)
-                painter.setPen(QColor("white"))
-                painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, tag)
+            tag = SHORT.get(item.label, "Checking…" if item.status == "checking" else "Not checked")
+            if item.confidence is not None:
+                tag += f" {round(item.confidence * 100)}%"
+            tw = painter.fontMetrics().horizontalAdvance(tag) + 8
+            tag_rect = place_tag(rects[0], rects[-1], tw, self.width(), occupied)
+            occupied.append(tag_rect)
+            painter.fillRect(tag_rect, colour)
+            painter.setPen(QColor("white"))
+            painter.drawText(tag_rect, Qt.AlignmentFlag.AlignCenter, tag)
         painter.end()
 
 
