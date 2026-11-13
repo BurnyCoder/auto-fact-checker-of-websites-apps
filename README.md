@@ -83,7 +83,8 @@ in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-
   and/or a **side panel** with label, confidence + reasoning, explanation, correction, sources (✓ quote found /
   ✗ not found / not checked), sandbox computations, and a "Check this claim" button for claims beyond the first
   3 that each check verifies automatically (`MAX_AUTO_CHECKS_PER_BATCH`). Screen boxes stay for 60 s after the last
-  verdict arrives.
+  verdict arrives. The panel and the Chrome card, popup and Options page follow Windows / Chrome light and dark mode
+  ([dark](docs/images/panel-dark-mode.png), [light](docs/images/panel-light-mode.png)).
 * **Agent tools**: built-in WebSearch + WebFetch; `fetch_file` (raw CSV/JSON/XLSX/PDF/HTML into a per-claim `/work`
   folder, public internet only, SSRF-safe); `bash` in an offline bubblewrap sandbox with every interpreter/compiler
   in WSL.
