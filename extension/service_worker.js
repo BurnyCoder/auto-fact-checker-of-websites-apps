@@ -129,10 +129,14 @@ async function askTab(tabId, msg) {
 }
 
 // ---- toolbar button (popup), keyboard command, context menu, status ---------------------------------
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.removeAll(() => {                      // reload keeps old items: avoid a duplicate-id error
     chrome.contextMenus.create({ id: "fc-selection", title: "Fact-check selected text", contexts: ["selection"] });
   });
+  // Settings v2 (2026-11-13): checking became on-request by default. autoMode=true stored by the old Options page was
+  // that page's default checkbox state, not a choice, so it is reset once; ticking the box later is kept.
+  const { settingsVersion = 1 } = await chrome.storage.local.get("settingsVersion");
+  if (settingsVersion < 2) await chrome.storage.local.set({ autoMode: false, settingsVersion: 2 });
 });
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "fc-selection" && tab?.id != null) askTab(tab.id, { type: "checkSelection" });
