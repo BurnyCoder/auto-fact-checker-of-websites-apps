@@ -302,6 +302,27 @@ def test_hotkey_filter_dispatches_each_binding(qt, monkeypatch):
     hotkeys.close()
 
 
+def test_panel_check_all_presses_every_check_button(qt):
+    """User (2026-11-13): a "Check all claims" button that presses every "Check this claim" (and "Try again") button."""
+    from factcheck.ui.panel import Panel
+
+    state = UiState()
+    src = SourceInfo(kind="desktop", source_id="screen:x", app="screen", title="DISPLAY1")
+    claims = [Claim(id=f"c{i}", text=f"Claim {i}.", span="s", block_id="b", source=src, status=st)
+              for i, st in enumerate(["pending", "pending", "error", "checking", "done"])]
+    state.on_event({"type": "claims", "source_id": "screen:x", "claims": claims})
+    state.on_event({"type": "verdict", "source_id": "screen:x", "claim_id": "c4", "verdict": verdict()})
+    checked = []
+    panel = Panel(state, on_check=checked.append, status_text=lambda: "")
+    assert panel.check_all.text() == "Check all claims (3)" and not panel.check_all.isHidden()
+    panel.check_all.click()
+    assert checked == ["c0", "c1", "c2"]                        # pending and failed ones, not checking/done
+    for cid in checked:
+        state.on_event({"type": "status", "source_id": "screen:x", "claim_id": cid, "status": "checking"})
+    assert panel.check_all.isHidden()                           # nothing left to check
+    panel.close()
+
+
 def test_card_puts_the_label_pill_on_its_own_line():
     src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
     claim = Claim(id="c", text="x", span="s", block_id="b", source=src)
