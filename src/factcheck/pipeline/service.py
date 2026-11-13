@@ -83,6 +83,7 @@ class FactCheckService:
         try:
             claims = await extract_claims(fresh, source, self.runner, purpose="app-extract")
         except BudgetExceeded as exc:
+            log.warning("not extracting claims from %s: %s", source.source_id, exc)
             self.emit({"type": "status", "source_id": source.source_id, "claim_id": None, "status": "error",
                        "message": str(exc)})
             return []
@@ -192,7 +193,9 @@ class FactCheckService:
             raise
         except Exception as exc:
             claim.status = "error"
-            if not isinstance(exc, BudgetExceeded):
+            if isinstance(exc, BudgetExceeded):
+                log.warning("not checking %s: %s", claim.id, exc)
+            else:
                 log.exception("verify_claim failed for %s", claim.id)
             self.emit({"type": "status", "source_id": claim.source.source_id, "claim_id": claim.id, "status": "error",
                        "message": f"{type(exc).__name__}: {exc}"[:300]})

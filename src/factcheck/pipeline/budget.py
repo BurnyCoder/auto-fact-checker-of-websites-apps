@@ -30,6 +30,13 @@ class BudgetExceeded(RuntimeError):
     """Raised before a call that could push spending over a cap."""
 
 
+class BudgetBusy(BudgetExceeded):
+    """The call fits under the caps, but not while other calls hold their worst-case reservations: wait and retry.
+
+    Found in the live Chrome test (2026-11-13): with $0.63 of a $1 daily cap spent and $0.21 reserved per check,
+    the 2nd and 3rd concurrent checks were refused as "daily app budget reached" and showed as never checked."""
+
+
 @contextmanager
 def file_lock(path: Path):
     """Cross-process exclusive lock on `<path>.lock` (msvcrt on Windows, fcntl elsewhere).
@@ -107,14 +114,19 @@ class BudgetLedger:
         return round(self.total_cap - self.spent_total() - self._reserved, 6)
 
     def reserve(self, worst_case_usd: float, purpose: str) -> None:
-        """Claim room for one call; raise BudgetExceeded if the caps would be broken."""
+        """Claim room for one call. Raise BudgetExceeded if the spending so far leaves no room for it, or BudgetBusy
+        if it only lacks room because of other calls still in flight (their reservations are released when done)."""
         with self._lock:
-            if self.spent_total() + self._reserved + worst_case_usd > self.total_cap:
-                raise BudgetExceeded(f"total budget ${self.total_cap:.2f} would be exceeded "
-                                     f"(spent ${self.spent_total():.4f}, in flight ${self._reserved:.4f})")
-            if (purpose.startswith("app") and self.daily_app_cap is not None
-                    and self.spent_today_app() + self._reserved + worst_case_usd > self.daily_app_cap):
-                raise BudgetExceeded(f"daily app budget ${self.daily_app_cap:.2f} reached")
+            caps = [("total budget", self.total_cap, self.spent_total(), "TOTAL_BUDGET_USD")]
+            if purpose.startswith("app") and self.daily_app_cap is not None:
+                caps.append(("daily app budget", self.daily_app_cap, self.spent_today_app(), "DAILY_APP_BUDGET_USD"))
+            for name, cap, spent, env in caps:
+                if spent + worst_case_usd > cap:
+                    raise BudgetExceeded(f"{name} ${cap:.2f} reached (${spent:.2f} spent, a call may cost up to "
+                                         f"${worst_case_usd:.2f}); raise {env} in .env to continue")
+            for name, cap, spent, _ in caps:
+                if spent + self._reserved + worst_case_usd > cap:
+                    raise BudgetBusy(f"{name} ${cap:.2f}: waiting for ${self._reserved:.2f} reserved by calls in flight")
             self._reserved += worst_case_usd
 
     def release(self, worst_case_usd: float) -> None:

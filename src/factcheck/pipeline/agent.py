@@ -36,7 +36,7 @@ from claude_agent_sdk import (
 
 from factcheck.config import Settings
 from factcheck.log import llm_event
-from factcheck.pipeline.budget import BudgetLedger
+from factcheck.pipeline.budget import BudgetBusy, BudgetLedger
 
 log = logging.getLogger(__name__)
 
@@ -130,6 +130,8 @@ class AuthFallback(Exception):
 class AgentRunner:
     """Runs isolated agent sessions with auth fallback, budget checks and full logging."""
 
+    budget_poll_s = 1.0                                 # how often a call waiting for budget room re-checks the ledger
+
     def __init__(self, settings: Settings, ledger: BudgetLedger,
                  query_fn: Callable[..., AsyncIterator[Any]] = claude_agent_sdk.query):
         self.settings = settings
@@ -179,7 +181,7 @@ class AgentRunner:
                   allowed_tools: list[str] | None = None, hooks: dict | None = None, max_turns: int = 2,
                   worst_case_usd: float = 0.02, timeout_s: float = 120.0, meta: dict | None = None) -> AgentRun:
         """Run one session; on subscription auth failure in auto mode, retry once with the API key."""
-        self.ledger.reserve(worst_case_usd, purpose)   # raises BudgetExceeded before spending anything
+        await self._reserve(worst_case_usd, purpose)   # raises BudgetExceeded before spending anything
         try:
             try:
                 return await self._run_once(prompt, kind, purpose, system_prompt, schema, tools or [], mcp_servers,
@@ -190,11 +192,20 @@ class AgentRunner:
                 log.warning("subscription auth unavailable (%s); switching to the API key for the rest of this run", exc)
                 self.auth = "api_key"
                 self.ledger.release(worst_case_usd)       # the first attempt is already in the ledger:
-                self.ledger.reserve(worst_case_usd, purpose)  # re-check the cap before spending again
+                await self._reserve(worst_case_usd, purpose)  # re-check the cap before spending again
                 return await self._run_once(prompt, kind, purpose, system_prompt, schema, tools or [], mcp_servers,
                                             allowed_tools or [], hooks, max_turns, worst_case_usd, timeout_s, meta)
         finally:
             self.ledger.release(worst_case_usd)
+
+    async def _reserve(self, worst_case_usd: float, purpose: str) -> None:
+        """Reserve budget, waiting while only other in-flight calls' reservations block it (they end within their
+        timeouts and release). A cap that the recorded spending alone would break still raises BudgetExceeded."""
+        while True:
+            try:
+                return self.ledger.reserve(worst_case_usd, purpose)
+            except BudgetBusy:
+                await asyncio.sleep(self.budget_poll_s)
 
     async def _run_once(self, prompt, kind, purpose, system_prompt, schema, tools, mcp_servers, allowed_tools,
                         hooks, max_turns, worst_case_usd, timeout_s, meta) -> AgentRun:
