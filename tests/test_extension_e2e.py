@@ -118,6 +118,74 @@ def test_extension_highlights_and_hover_card(tmp_path, backend, page_server):
         assert "Why this confidence" in card and "62%" in card and "Eiffel Tower" in card
 
 
+def ask_tab(worker, page, msg_type: str) -> None:
+    """What a shortcut / the popup / the context menu does: the service worker asks the page's tab (askTab)."""
+    worker.evaluate("""async ([url, type]) => { const [tab] = await chrome.tabs.query({ url });
+                                                 await askTab(tab.id, { type }); }""", [page.url, msg_type])
+
+
+# Paragraph index (in document order of h1, p, li) of every verdict highlight: which parts were checked.
+CHECKED_PARTS = ("() => { const parts = [...document.querySelectorAll('h1,p,li')];"
+                 " return [...new Set(['fc-supported','fc-refuted','fc-nee','fc-conflicting']"
+                 ".flatMap(k => [...(CSS.highlights.get(k) || [])])"
+                 ".map(r => parts.indexOf(r.startContainer.parentElement.closest('h1,p,li'))))].sort(); }")
+PICKING = "() => document.querySelector('#fc-card-host').dataset.debugPicking === '1'"
+
+
+def test_check_part_uses_the_selected_paragraphs(tmp_path, backend, page_server):
+    """Alt+Shift+S / right-click with text selected: only the paragraphs the selection touches are checked (the old
+    right-click path sent everything under the selection's common ancestor, here the whole article)."""
+    with backend_page(tmp_path, backend, page_server, auto=False) as (worker, page):
+        page.evaluate("""() => { const p = document.querySelectorAll('p'), r = document.createRange();
+                                 r.setStart(p[1].firstChild, 10); r.setEnd(p[2].firstChild, 12);
+                                 getSelection().removeAllRanges(); getSelection().addRange(r); }""")
+        ask_tab(worker, page, "checkSelection")                       # right-click "Fact-check selected text"
+        page.wait_for_function(f"({VERDICTS})() >= 1", timeout=20000)
+        page.wait_for_timeout(800)                                     # let any wrongly sent part arrive too
+        # the 2nd paragraph has no number, so the fake extractor finds no claim there: only the 3rd shows; before the
+        # fix the 1st paragraph and the list item (outside the selection) were checked as well ([1, 3, 4])
+        assert page.evaluate(CHECKED_PARTS) == [3]
+        page.evaluate("""() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('p b'));
+                                 getSelection().removeAllRanges(); getSelection().addRange(r); }""")
+        ask_tab(worker, page, "checkPart")                             # Alt+Shift+S on "330 metres"
+        page.wait_for_function(f"({CHECKED_PARTS})().includes(1)", timeout=20000)
+        assert page.evaluate(CHECKED_PARTS) == [1, 3]                  # its whole paragraph, never the list item
+        assert not page.evaluate(PICKING)                              # text was selected: no box picker
+
+
+def test_check_part_drag_a_box(tmp_path, backend, page_server):
+    """Alt+Shift+S with nothing selected: drag a box; only text inside it is checked. Esc cancels, an empty box says so."""
+    with backend_page(tmp_path, backend, page_server, auto=False) as (worker, page):
+        ask_tab(worker, page, "checkPart")
+        page.wait_for_function(PICKING, timeout=5000)
+        page.keyboard.press("Escape")
+        page.wait_for_function(f"!({PICKING})()", timeout=5000)
+        page.wait_for_timeout(1500)
+        assert page.evaluate(VERDICTS) == 0                            # cancelled: nothing sent
+
+        ask_tab(worker, page, "checkPart")
+        page.wait_for_function(PICKING, timeout=5000)
+        box = page.evaluate("() => { const r = document.querySelector('p').getBoundingClientRect();"
+                            " return [r.left, r.top, r.right, r.bottom]; }")
+        page.mouse.move(box[0] - 5, box[1] - 3)
+        page.mouse.down()
+        page.mouse.move(box[2] + 5, box[3] + 2, steps=5)
+        page.mouse.up()
+        page.wait_for_function(f"({VERDICTS})() >= 1", timeout=20000)
+        page.wait_for_timeout(800)
+        assert page.evaluate(CHECKED_PARTS) == [1] and not page.evaluate(PICKING)
+        card = hover_card(page)                                        # underline + hover card work as for a page check
+        assert "Eiffel Tower" in card
+
+        ask_tab(worker, page, "checkPart")                             # a box over empty margin: nothing to check
+        page.wait_for_function(PICKING, timeout=5000)
+        page.mouse.move(20, 600)
+        page.mouse.down()
+        page.mouse.move(200, 690, steps=3)
+        page.mouse.up()
+        page.wait_for_function(f"({TOAST})().includes('No text to check in that part')", timeout=5000)
+
+
 def test_hover_card_follows_dark_mode(tmp_path, backend, page_server):
     """User (2026-11-13): no white backgrounds in dark mode. The card follows prefers-color-scheme."""
     colours = "() => document.querySelector('#fc-card-host').dataset.debugCardColors"

@@ -18,6 +18,11 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
 * **Triggers.** By default nothing leaves a page until the user asks: toolbar button *Check this page now*,
   `Alt+Shift+F` (`commands`), or the right-click item. *Check pages automatically* in Options restores the
   automatic mode (on load, scroll and DOM changes).
+* **Part of a page.** `Alt+Shift+S` (`check-part`) or the popup's *Check part of page…*: with a non-empty selection,
+  `checkRange` keeps the blocks with a text node the selection intersects (`Range.intersectsNode`); otherwise a box
+  picker opens inside the closed shadow root and keeps the blocks with a text line box overlapping the box
+  (`Range.getClientRects`). Whole blocks are sent either way, so claims keep their context and underlines map to
+  exact ranges. The right-click item uses `checkRange` too.
 * **On demand only.** The worker opens the WebSocket only when there is work (a check, or the popup/Options asking for
   the status), and only after `GET /health` answers. A WebSocket handshake to a closed port logs
   `net::ERR_CONNECTION_REFUSED` in `chrome://extensions` on every attempt; a failed `fetch()` logs nothing (both
@@ -96,5 +101,10 @@ like unchecked claims (found in the live Chrome test, `reports/exp-00-developmen
   paints their rectangles bottom-up so each pixel belongs to the topmost window. Layered windows that never take
   focus (e.g. the GeForce overlay) may be transparent, so they never count as covering a window below them.
   Continuous mode applies the same rules to the foreground window (`privacy_reason` + minimized/tiny).
+* Region check (`Ctrl+Alt+R`, `ui/region.py`): one dimmed picker window per monitor (excluded from capture); the drag
+  is mapped to physical pixels with `phys = monitor origin + round(local · devicePixelRatio)`, the inverse of the
+  overlay mapping, so it is exact on mixed-DPI setups (measured: a full-screen drag on the 150 % monitor maps to its
+  2560×1440 physical rectangle). The pickers close before `capture_region` OCRs only that rectangle as source
+  `screen:region`; own, blocked and private windows are still blacked out, Chrome is not (explicit request).
 * Hotkey boxes stay for `SCREEN_LAYOUT_TTL_S` = 60 s after the screen's latest result (claims, status or verdict),
   not after the capture: verdicts take 20–60 s. A 1 s timer in `UiState` removes expired layouts.

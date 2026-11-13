@@ -1,13 +1,15 @@
-// popup.js — connection status, "check this page now", and a link to Options.
+// popup.js — connection status, "Check this page now", "Check part of page…", and a link to Options.
 const $ = (id) => document.getElementById(id);
 
 chrome.runtime.sendMessage({ type: "status" }).then(({ status }) => {
   $("status").textContent = { connected: "Connected to the local app", disconnected: "App not running / not connected",
                               "no-token": "Set the token in Options", "bad-token": "Token rejected — check Options" }[status] || status;
 });
-$("check").addEventListener("click", async () => {
+async function askActiveTab(type) {        // the service worker injects the content script into old tabs if needed
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id != null) await chrome.runtime.sendMessage({ type: "checkTab", tabId: tab.id });   // injects if needed
-  window.close();
-});
+  if (tab?.id != null) await chrome.runtime.sendMessage({ type, tabId: tab.id });
+  window.close();                            // the page gets the focus back (the box picker needs the mouse there)
+}
+$("check").addEventListener("click", () => askActiveTab("checkTab"));
+$("part").addEventListener("click", () => askActiveTab("checkPartTab"));
 $("options").addEventListener("click", () => chrome.runtime.openOptionsPage());

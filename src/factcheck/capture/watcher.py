@@ -6,7 +6,8 @@ Global context: runs as a task on the backend event loop (backend.py). Privacy r
 state, blocked apps (password managers, banking, ...), our own windows, incognito/private windows, and
 Chrome windows while the extension is connected (the extension handles those with exact page text).
 Continuous mode skips such a foreground window; the hotkey path, which reads whole monitors, blacks out the parts
-of the screen where such a window is on top before OCR (`skip_mask`).
+of the screen where such a window is on top before OCR (`skip_mask`). A region the user drags (Ctrl+Alt+R,
+ui/region.py) is an explicit request, so there only the privacy rules apply: Chrome inside it is read too.
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ def skip_mask(windows: list[winapi.WindowInfo], rect: winapi.Rect,
     return mask
 
 
+def _describe(windows: list[winapi.WindowInfo], reasons: dict[int, str]) -> str:
+    """Log text for the windows a capture left out: process names and reasons, never window titles."""
+    return ", ".join(f"{w.process} ({reasons[w.hwnd]})" for w in windows if w.hwnd in reasons) or "nothing"
+
+
 def thumbnail(pixels: np.ndarray, step: int = 8) -> np.ndarray:
     return pixels[::step, ::step, 1]                       # green channel ~ luminance, every 8th pixel
 
@@ -71,31 +77,37 @@ class DesktopCapture:
         """Why continuous mode ignores this foreground window (None = capture it)."""
         if win.minimized or win.rect.width < 80 or win.rect.height < 60:
             return "minimized/tiny"
-        return self.privacy_reason(win)
+        return self.leave_out_reason(win)
 
     def privacy_reason(self, win: winapi.WindowInfo) -> str | None:
-        """Why this window's text must never be read (both modes)."""
+        """Why this window's text must never be read (every capture path, including a dragged region)."""
         if win.is_own:
             return "own window"
         if win.process in self.settings.blocked_app_list:
             return f"blocked app {win.process}"
         if any(p in win.title.lower() for p in PRIVATE_TITLES):
             return "private window"
+        return None
+
+    def leave_out_reason(self, win: winapi.WindowInfo) -> str | None:
+        """Privacy rules plus Chrome while the extension is connected: it checks pages with exact text and
+        underlines, so the automatic paths (continuous, whole-screen hotkey) leave Chrome to it."""
+        if reason := self.privacy_reason(win):
+            return reason
         if win.process in CHROME_PROCESSES and self.extension_connected():
             return "browser handled by the extension"
         return None
 
     # ---------------------------------------------------------------- OCR helpers
-    async def _ocr_monitor(self, mon: winapi.Monitor, windows: list[winapi.WindowInfo], left_out: set[int]):
-        """Screenshot one monitor, black out where a left-out window is on top, OCR, group into blocks."""
-        rect = mon.rect
+    async def _ocr_rect(self, rect: winapi.Rect, prefix: str, windows: list[winapi.WindowInfo], left_out: set[int]):
+        """Screenshot a desktop rectangle, black out where a left-out window is on top, OCR, group into blocks."""
         pixels = await asyncio.to_thread(grab, rect.left, rect.top, rect.width, rect.height)
         mask = skip_mask(windows, rect, lambda w: w.hwnd in left_out)
         if mask.any():
             pixels = pixels.copy()                           # mss buffers are read-only
             pixels[mask] = (0, 0, 0, 255)                    # opaque black: no text for the OCR to find
         lines = await ocr_bgra(pixels, rect.left, rect.top)
-        return group_lines(lines, prefix=f"s{mon.device[-1]}-")
+        return group_lines(lines, prefix=prefix)
 
     def _publish_layout(self, source_id: str, blocks) -> None:
         self.layouts[source_id] = blocks
@@ -108,11 +120,11 @@ class DesktopCapture:
             return 0
         total = 0
         windows = await asyncio.to_thread(winapi.visible_windows)
-        reasons = {w.hwnd: r for w in windows if (r := self.privacy_reason(w))}
+        reasons = {w.hwnd: r for w in windows if (r := self.leave_out_reason(w))}
         for mon in winapi.monitors():
             source_id = f"screen:{mon.device}"
             try:
-                blocks = await self._ocr_monitor(mon, windows, set(reasons))
+                blocks = await self._ocr_rect(mon.rect, f"s{mon.device[-1]}-", windows, set(reasons))
             except Exception:
                 log.exception("OCR failed on %s", mon.device)
                 continue
@@ -120,9 +132,29 @@ class DesktopCapture:
             source = SourceInfo(kind="desktop", source_id=source_id, app="screen", title=mon.device)
             asyncio.create_task(self.service.submit(source, blocks, auto=True, force=True))
             total += len(blocks)
-        left_out = ", ".join(f"{w.process} ({reasons[w.hwnd]})" for w in windows if w.hwnd in reasons) or "nothing"
-        log.info("hotkey capture: %d text blocks on %d monitor(s); left out: %s", total, len(winapi.monitors()), left_out)
+        log.info("hotkey capture: %d text blocks on %d monitor(s); left out: %s", total, len(winapi.monitors()),
+                 _describe(windows, reasons))
         return total
+
+    async def capture_region(self, rect: winapi.Rect) -> int:
+        """OCR only the rectangle the user dragged (ui/region.py) and check it. Returns #blocks.
+        One source, "screen:region": a new region replaces the previous one, and the `screen:` prefix gives its boxes
+        the same 60 s expiry and frame-change hiding as whole-screen checks (ui/state.py)."""
+        if self.paused:
+            return 0
+        windows = await asyncio.to_thread(winapi.visible_windows)
+        reasons = {w.hwnd: r for w in windows if (r := self.privacy_reason(w))}
+        try:
+            blocks = await self._ocr_rect(rect, "r-", windows, set(reasons))
+        except Exception:
+            log.exception("OCR failed on region %s", rect)
+            return 0
+        source_id = "screen:region"
+        self._publish_layout(source_id, blocks)
+        source = SourceInfo(kind="desktop", source_id=source_id, app="screen", title="selected region")
+        asyncio.create_task(self.service.submit(source, blocks, auto=True, force=True))
+        log.info("region capture: %d text blocks in %s; left out: %s", len(blocks), rect, _describe(windows, reasons))
+        return len(blocks)
 
     # ---------------------------------------------------------------- continuous path
     async def run_continuous(self) -> None:

@@ -141,14 +141,20 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "fc-selection" && tab?.id != null) askTab(tab.id, { type: "checkSelection" });
 });
+// Alt+Shift+F checks the visible page; Alt+Shift+S checks only a part (the selected text, or a box dragged over the
+// page). Chrome allows at most 4 suggested shortcuts per extension
+// (https://developer.chrome.com/docs/extensions/reference/api/commands); the user can change both in
+// chrome://extensions/shortcuts.
+const COMMANDS = { "check-page": "checkPage", "check-part": "checkPart" };
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== "check-page") return;
+  if (!COMMANDS[command]) return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id != null) askTab(tab.id, { type: "checkPage" });
+  if (tab?.id != null) askTab(tab.id, { type: COMMANDS[command] });
 });
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.type === "status") { connect().then(() => reply({ status: lastStatus })); return true; }
-  if (msg?.type === "checkTab") { askTab(msg.tabId, { type: "checkPage" }).then(() => reply({ ok: true })); return true; }
+  const ask = { checkTab: "checkPage", checkPartTab: "checkPart" }[msg?.type];    // popup buttons
+  if (ask) { askTab(msg.tabId, { type: ask }).then(() => reply({ ok: true })); return true; }
   return false;
 });
 chrome.storage.onChanged.addListener((changes) => {

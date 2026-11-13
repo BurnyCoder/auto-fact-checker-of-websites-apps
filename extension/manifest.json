@@ -13,6 +13,7 @@
   "action": { "default_popup": "popup.html", "default_title": "Fact check" },
   "options_page": "options.html",
   "commands": {
-    "check-page": { "suggested_key": { "default": "Alt+Shift+F" }, "description": "Fact-check the visible part of this page now" }
+    "check-page": { "suggested_key": { "default": "Alt+Shift+F" }, "description": "Fact-check the visible part of this page now" },
+    "check-part": { "suggested_key": { "default": "Alt+Shift+S" }, "description": "Fact-check the selected text, or drag a box over part of the page" }
   }
 }

@@ -14,6 +14,19 @@ from factcheck.capture.watcher import DesktopCapture, frames_equal
 from factcheck.models import Box
 
 
+class NullService:
+    """Stands in for FactCheckService where only the OCR layout matters: records submits, extracts nothing."""
+
+    def __init__(self) -> None:
+        self.submitted = []
+
+    def emit(self, _event) -> None:
+        pass
+
+    async def submit(self, source, blocks, **kw) -> None:
+        self.submitted.append((source, blocks, kw))
+
+
 def render(lines: list[tuple[int, int, str]], size=(900, 220), font_size=22) -> np.ndarray:
     img = Image.new("RGB", size, "white")
     draw = ImageDraw.Draw(img)
@@ -128,14 +141,46 @@ async def test_hotkey_capture_leaves_out_own_and_blocked_windows(settings, monke
                         lambda: [win(os.getpid(), "python.exe", 110), win(4242, "keepass.exe", 160)])
     monkeypatch.setattr(watcher_mod, "grab", lambda left, top, w, h: pixels)
 
-    class Service:                                   # only the layout matters here: no extraction
-        def emit(self, _e): pass
-        async def submit(self, *_a, **_kw): pass
-
-    cap = DesktopCapture(settings, Service(), extension_connected=lambda: False)
+    cap = DesktopCapture(settings, NullService(), extension_connected=lambda: False)
     await cap.capture_now()
     text = " ".join(b.text for b in cap.layouts["screen:\\.\\DISPLAY9"])
     assert "Coffee" in text and "Jacobian" not in text and "hunter2" not in text
+
+
+async def test_region_capture_reads_only_the_region(settings, monkeypatch):
+    """Ctrl+Alt+R: only the dragged rectangle is screenshotted and read. Chrome inside it is read even while the
+    extension is connected (the user picked it explicitly); own windows are still blacked out."""
+    import asyncio
+    import os
+
+    import factcheck.capture.watcher as watcher_mod
+
+    screen = render([(20, 20, "Coffee is the second most traded commodity after oil."),
+                     (20, 120, "Chrome says the Eiffel Tower is 330 metres tall."),
+                     (20, 170, "Panel says the Jacobian conjecture is false.")])
+    calls = []
+
+    def grab(left, top, w, h):
+        calls.append((left, top, w, h))
+        return screen[top:top + h, left:left + w].copy()
+
+    win = lambda pid, process, top: winapi.WindowInfo(hwnd=top, title="w", pid=pid, process=process,
+                                                      rect=winapi.Rect(0, top, 900, 45), minimized=False)
+    monkeypatch.setattr(watcher_mod, "grab", grab)
+    monkeypatch.setattr(watcher_mod.winapi, "visible_windows",
+                        lambda: [win(os.getpid(), "python.exe", 160), win(77, "chrome.exe", 110)])
+    service = NullService()
+    cap = DesktopCapture(settings, service, extension_connected=lambda: True)
+    assert await cap.capture_region(winapi.Rect(0, 100, 900, 120)) >= 1
+    assert calls == [(0, 100, 900, 120)]
+    text = " ".join(b.text for b in cap.layouts["screen:region"])
+    assert "Eiffel" in text and "Coffee" not in text and "Jacobian" not in text
+    await asyncio.sleep(0)                                     # submit runs as a task
+    source, blocks, kw = service.submitted[0]
+    assert source.source_id == "screen:region" and source.kind == "desktop" and kw["force"]
+    assert all(b.id.startswith("r-") and b.boxes[0].y >= 100 for b in blocks)   # boxes in desktop coordinates
+    cap.paused = True
+    assert await cap.capture_region(winapi.Rect(0, 100, 900, 120)) == 0
 
 
 async def test_hotkey_capture_path_with_rendered_screen(settings, monkeypatch):

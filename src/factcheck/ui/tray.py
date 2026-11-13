@@ -29,7 +29,7 @@ def make_icon(paused: bool = False) -> QIcon:
 
 class Tray(QSystemTrayIcon):
     def __init__(self, *, mode: str, display: str, on_pause: Callable[[bool], None], on_check_now: Callable[[], None],
-                 on_mode: Callable[[str], None], on_display: Callable[[str], None], on_show_panel: Callable[[], None],
+                 on_check_part: Callable[[], None], on_mode: Callable[[str], None], on_display: Callable[[str], None], on_show_panel: Callable[[], None],
                  on_copy_token: Callable[[], None], on_open_logs: Callable[[], None], budget_text: Callable[[], str],
                  on_quit: Callable[[], None]):
         super().__init__(make_icon())
@@ -40,6 +40,7 @@ class Tray(QSystemTrayIcon):
         self.pause_action.toggled.connect(lambda on: (on_pause(on), self.setIcon(make_icon(on))))
         menu.addAction(self.pause_action)
         menu.addAction("Check screen now", on_check_now)
+        menu.addAction("Check part of screen…", on_check_part)
         menu.addAction("Show panel", on_show_panel)
         menu.addSeparator()
         for title, options, current, handler in (("Trigger", ("continuous", "hotkey", "both"), mode, on_mode),
