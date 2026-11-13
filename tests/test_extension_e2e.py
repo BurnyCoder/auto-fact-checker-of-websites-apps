@@ -207,12 +207,21 @@ CHECKED_DATA_PARTS = ("() => [...new Set(['fc-supported','fc-refuted','fc-nee','
                       ".map(r => r.startContainer.parentElement.closest('[data-part]').dataset.part))].sort()")
 
 
-def test_check_part_reads_short_and_huge_blocks(tmp_path, backend, page_server):
-    """User (2026-11-13): "No text to check in that part" although the box had text. Page checks skip blocks under 40
-    characters (Reddit has comments like "Zhang et al. is just one guy /s", 31) and drop blocks over 4,000 whole; a part
-    you pick yourself must still be checked. Text with no DOM (canvas) gets a message pointing to Ctrl+Alt+R."""
+def test_no_length_limits_short_and_huge_blocks(tmp_path, backend, page_server):
+    """User (2026-11-13): "No text to check in that part" although the box had text: blocks under 40 characters
+    (Reddit comments like "Zhang et al. is just one guy /s") and over 4,000 (a whole long X post is ONE element, 5,451
+    characters measured) were dropped. User decision: no limits, only "no text" leaves a block out. Text with no DOM
+    (canvas) gets a message pointing to Ctrl+Alt+R."""
     with extension_page(tmp_path, f"ws://127.0.0.1:{backend.port}/ws", backend.settings.server_token,
                         f"{page_server}/parts.html", auto=False) as (worker, page):
+        ask_tab(worker, page, "checkPage")                                 # whole page: short and huge blocks too
+        page.wait_for_function(f"({CHECKED_DATA_PARTS})().length === 3", timeout=20000)
+        assert page.evaluate(CHECKED_DATA_PARTS) == ["huge", "long", "short"]
+        assert page.evaluate(VERDICTS) == 3                                # nothing from the canvas: it has no text
+        page.evaluate("() => location.reload()")                           # fresh page for the picks below
+        page.wait_for_load_state("load")
+        page.wait_for_function("() => !!document.querySelector('#fc-card-host')", timeout=5000)
+
         ask_tab(worker, page, "checkPart")
         page.wait_for_function(PICKING, timeout=5000)
         r = page.evaluate("() => { const b = document.querySelector('[data-part=short] p').getBoundingClientRect();"
@@ -221,11 +230,11 @@ def test_check_part_reads_short_and_huge_blocks(tmp_path, backend, page_server):
         page.wait_for_function(f"({CHECKED_DATA_PARTS})().includes('short')", timeout=20000)
         assert "in the box" in page.evaluate(TOAST)
 
-        page.evaluate("""() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#huge span'));
+        page.evaluate("""() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#huge'));
                                  getSelection().removeAllRanges(); getSelection().addRange(r); }""")
-        ask_tab(worker, page, "checkPart")                                 # a sentence inside a 5,000-character block
+        ask_tab(worker, page, "checkPart")                                 # all of a 5,100-character block, in one piece
+        page.wait_for_function(f"({TOAST})().includes('1 paragraph from your selection')", timeout=5000)
         page.wait_for_function(f"({CHECKED_DATA_PARTS})().includes('huge')", timeout=20000)
-        assert page.evaluate(CHECKED_DATA_PARTS) == ["huge", "short"]     # nothing else on the page
 
         ask_tab(worker, page, "checkPart")
         page.wait_for_function(PICKING, timeout=5000)

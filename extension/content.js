@@ -26,11 +26,9 @@
   const LABEL_COLOR = { "Supported": "#2e9d4f", "Refuted": "#d93025", "Not Enough Evidence": "#80868b",
                         "Conflicting Evidence/Cherrypicking": "#f0a400" };
   const SKIP = "script,style,noscript,textarea,input,select,button,code,pre,svg,nav,footer,[aria-hidden='true'],[contenteditable='true'],#fc-card-host";
-  const MIN_CHARS = 40, MAX_CHARS = 4000, MAX_BLOCKS = 40;
-  // A part the user picks (selection or box) may be short: Reddit comments such as "Zhang et al. is just one guy /s"
-  // (31 characters) are under MIN_CHARS, which only exists to keep UI labels out of automatic page checks
-  // (user report "No text to check in that part", 2026-11-13).
-  const MIN_PICK_CHARS = 8;
+  // No length or count limits on text (user decision, 2026-11-13: "just remove the limits, only no text"): a block is
+  // left out only when it has no text. Earlier minimum (40 characters) and maximum (4,000) dropped short comments and
+  // whole long X posts (one element, 5,451 characters measured), which made picks say "No text" over visible text.
 
   // One Highlight object per colour, registered once (names match ::highlight() rules in content.css).
   const HL = {};
@@ -106,14 +104,8 @@
       groups.get(el).push(walker.currentNode);
     }
     const out = [];
-    for (let [el, nodes] of groups) {
+    for (const [el, nodes] of groups) {                   // every group has text: the walker skips blank nodes
       if (keepNode && !nodes.some(keepNode)) continue;
-      let text = nodes.map((n) => n.nodeValue).join("");
-      if (keepNode && text.length > MAX_CHARS) {           // picked part of a huge block: send only the picked text
-        nodes = nodes.filter(keepNode);
-        text = nodes.map((n) => n.nodeValue).join("");
-      }
-      if (text.trim().length < (keepNode ? MIN_PICK_CHARS : MIN_CHARS) || text.length > MAX_CHARS) continue;
       if (onlyVisible) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.bottom < -200 || r.top > innerHeight + 200) continue;
@@ -121,7 +113,7 @@
       let id = blockIdOf.get(el);
       if (!id) { id = `b${nextBlock++}`; blockIdOf.set(el, id); }
       blocks.set(id, { el, nodes });
-      out.push({ id, text });
+      out.push({ id, text: nodes.map((n) => n.nodeValue).join("") });
     }
     return out;
   }
@@ -141,7 +133,7 @@
       lastAuto = now;
     }
     const all = collectBlocks(onlyVisible, within, keep);
-    const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
+    const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text);
     if (!fresh.length) {
       if (force) toast(keep ? "No text to check in that part. Text in frames, images or canvases is not part of the page; "
                               + "Ctrl+Alt+R reads it from the screen." : "No text to check on this page");
