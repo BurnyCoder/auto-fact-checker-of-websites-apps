@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from pydantic import ValidationError
 
@@ -63,13 +65,48 @@ def test_align_span_exact_and_fuzzy():
 
 async def test_extract_drops_unlocatable_spans(scripted):
     blocks = [TextBlock(id="b1", text="The Eiffel Tower is 330 m tall. I love Paris.")]
-    runner = scripted([AgentRun(run_id="r", ok=True, structured={"claims": [
-        {"block_id": "b1", "span": "The Eiffel Tower is 330 m tall", "claim": "The Eiffel Tower is 330 m tall.", "reason": "number"},
-        {"block_id": "b1", "span": "Totally invented sentence", "claim": "x", "reason": "y"},
-    ]})])
+    runner = scripted([AgentRun(run_id="r", ok=True, structured={       # per-sentence answer (the app path)
+        "s1": [{"block_id": "b1", "span": "The Eiffel Tower is 330 m tall", "claim": "The Eiffel Tower is 330 m tall.",
+                  "reason": "number", "importance": 1}],
+        "s2": [{"block_id": "b1", "span": "Totally invented sentence", "claim": "x", "reason": "y", "importance": 3}],
+    })])
     claims = await extract_claims(blocks, SRC, runner, purpose="test")
     assert [c.span for c in claims] == ["The Eiffel Tower is 330 m tall"]
     assert runner.calls[0]["tools"] == [] and runner.calls[0]["kind"] == "extract"
+
+
+async def test_extract_has_no_claim_cap_and_covers_every_sentence(scripted):
+    """User (2026-11-13): "it can extract as many claims as it wants" and "make sure it actually extracts all claims".
+    The app asks per sentence: every sentence id is a REQUIRED key of the output schema, so the model must answer for
+    each one (a claims list, possibly empty). Claims come back in importance order (the first few are verified
+    automatically, the rest wait for the Check button). The eval keeps its preregistered prompt and schema."""
+    from factcheck.pipeline.prompts import EXTRACT_SCHEMA, build_extract_prompt, sentence_units
+
+    text = " ".join(f"Tower {i} is {100 + i} metres tall." for i in range(15)) + " What a view!"
+    blocks = [TextBlock(id="b1", text=text), TextBlock(id="b2", text="The bridge opened in 1937.")]
+    units = sentence_units(blocks)
+    assert [u[0] for u in units][:2] == ["s1", "s2"] and units[-1] == ("s17", "b2", "The bridge opened in 1937.")
+    assert all(re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", sid) for sid, _, _ in units)   # API rule for schema property names
+    prompt = build_extract_prompt(blocks, "", None)
+    assert all(f"[{sid}] {sentence}" in prompt for sid, _, sentence in units) and "at most" not in prompt
+    answer = {sid: [] for sid, _, _ in units}
+    for i in range(15):
+        answer[f"s{i + 1}"] = [{"block_id": "b1", "span": f"Tower {i} is {100 + i} metres tall", "claim": f"Tower {i} is {100 + i} m.",
+                                  "reason": "number", "importance": 2}]
+    answer["s17"] = [{"block_id": "?", "span": "The bridge opened in 1937", "claim": "The bridge opened in 1937.",
+                       "reason": "date", "importance": 1}]
+    runner = scripted([AgentRun(run_id="r", ok=True, structured=answer)])
+    claims = await extract_claims(blocks, SRC, runner, purpose="test")
+    assert len(claims) == 16                                             # no cap (was 12)
+    assert claims[0].text == "The bridge opened in 1937." and claims[0].block_id == "b2"   # importance 1 first; block from id
+    schema = runner.calls[0]["schema"]
+    assert set(schema["required"]) == {sid for sid, _, _ in units}       # every sentence must be answered
+    # the eval passes a cap: preregistered prompt and schema, unchanged
+    assert "Return at most 12 claims." in build_extract_prompt(blocks, "", 12)
+    items = [{"block_id": "b1", "span": f"Tower {i} is {100 + i} metres tall", "claim": f"T{i}", "reason": "n"} for i in range(15)]
+    runner = scripted([AgentRun(run_id="r", ok=True, structured={"claims": items})])
+    assert len(await extract_claims(blocks, SRC, runner, purpose="test", max_claims=12)) == 12
+    assert runner.calls[0]["schema"] is EXTRACT_SCHEMA
 
 
 # ---------------- verification ----------------

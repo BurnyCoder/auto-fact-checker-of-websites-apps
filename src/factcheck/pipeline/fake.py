@@ -25,9 +25,17 @@ class FakeRunner:
         self.settings = settings
         self.auth = "fake"
 
-    async def run(self, prompt: str, *, kind: str, **_: object) -> AgentRun:
+    async def run(self, prompt: str, *, kind: str, schema: dict | None = None, **_: object) -> AgentRun:
         run = AgentRun(run_id=uuid.uuid4().hex[:10], ok=True, subtype="success", auth="fake", num_turns=1)
-        if kind == "extract":
+        if kind == "extract" and schema is not None and "claims" not in schema["properties"]:
+            # per-sentence schema (the app): one required key per sentence id, "[s3] sentence" lines in the prompt;
+            # the extractor fills block_id from its own sentence list
+            lines = {m.group("id"): m.group("text") for m in _BLOCK_RE.finditer(prompt)}
+            run.structured = {sid: ([{"block_id": "", "span": lines[sid], "claim": lines[sid],
+                                      "reason": "contains a number", "importance": 2}]
+                                    if any(ch.isdigit() for ch in lines.get(sid, "")) else [])
+                              for sid in schema["required"]}
+        elif kind == "extract":
             claims = []
             for m in _BLOCK_RE.finditer(prompt):
                 for sentence in split_sentences(m.group("text")):
