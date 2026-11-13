@@ -74,11 +74,15 @@ in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-
 * **Two capture paths**
   * Chrome/Chromium **MV3 extension**: exact page text, inline underlines via the CSS Custom Highlight API
     (no DOM edits), hover card with full verdict. Checks start only when you ask: toolbar button *Check this page
-    now*, `Alt+Shift+F`, or right-click "Fact-check selected text" (automatic checking while reading is an option).
+    now* or `Alt+Shift+F` (the visible page); *Check part of page…* or `Alt+Shift+S` (the paragraphs your selection
+    touches, or, with nothing selected, a box you drag over the page); right-click "Fact-check selected text".
+    Automatic checking while reading is an option.
   * **Desktop OCR** (Windows.Media.Ocr): `Ctrl+Alt+F` or the tray's *Check screen now* checks everything on all
     monitors, except windows it must not read (the app's own panel, blocked apps, private windows, and Chrome while
-    the extension handles it), which are blacked out before OCR; the optional continuous mode checks the foreground
-    window when it settles. Lines are grouped into messages/paragraphs before extraction.
+    the extension handles it), which are blacked out before OCR. `Ctrl+Alt+R` or *Check part of screen…* lets you
+    drag a box, like Snipping Tool, and checks only that part ([picker](docs/images/region-picker.png)); Chrome
+    inside the box is read too, since you picked it. The optional continuous mode checks the foreground window when
+    it settles. Lines are grouped into messages/paragraphs before extraction.
 * **Display**: per-monitor click-through **overlay** (colour = label, border width = confidence, tag "Refuted 93 %")
   and/or a **side panel** with label, confidence + reasoning, explanation, correction, sources (✓ quote found /
   ✗ not found / not checked), sandbox computations, and a "Check this claim" button for claims beyond the first
@@ -120,7 +124,8 @@ What happens when you run it:
 1. `uv run factcheck` starts the Qt app (tray icon) and a background asyncio thread with the localhost server,
    the fact-check service and the capture loop.
 2. When you press the toolbar button / `Alt+Shift+F` (Chrome) or `Ctrl+Alt+F` (desktop), text arrives from the
-   extension (visible paragraphs of the page) or from OCR (all monitors). Optional automatic modes send it while you
+   extension (visible paragraphs of the page) or from OCR (all monitors). `Alt+Shift+S` / `Ctrl+Alt+R` send only the
+   part you selected or dragged a box over. Optional automatic modes send it while you
    read (extension option; `FACTCHECK_MODE=continuous|both`: the foreground window, after two identical frames).
 3. New blocks go to the **extractor** (one Haiku call, no tools) which returns atomic claims with exact spans.
 4. Cached claims are answered immediately; the first 3 new ones are queued for **verification**, the rest wait
@@ -177,7 +182,7 @@ copy .env.example .env
 ## Use
 
 ```bash
-uv run factcheck                                  # desktop app (tray icon, overlay, panel, hotkey Ctrl+Alt+F)
+uv run factcheck                                  # desktop app (tray, overlay, panel; Ctrl+Alt+F screen, Ctrl+Alt+R part)
 uv run factcheck-cli claim "Water boils at 90 °C at sea level."
 uv run factcheck-cli text "Paste a paragraph; every check-worthy claim in it is verified."
 uv run factcheck-cli budget                       # API-equivalent spend so far
@@ -185,8 +190,10 @@ uv run factcheck-cli budget                       # API-equivalent spend so far
 
 Settings live in `.env` (see [`.env.example`](.env.example)): `FACTCHECK_MODE=hotkey|continuous|both` (default hotkey),
 `FACTCHECK_DISPLAY=overlay|panel|both`, `TOTAL_BUDGET_USD`, `DAILY_APP_BUDGET_USD`, `MAX_WEB_SEARCHES`,
-`BLOCKED_APPS`, `HOTKEY`, `FACTCHECK_FAKE_LLM=true` (deterministic fake verdicts, $0, for UI work).
-Tray menu: pause, check screen now, switch trigger/display modes, copy extension token, open logs, budget.
+`BLOCKED_APPS`, `HOTKEY` (whole screen), `REGION_HOTKEY` (drag a box), `FACTCHECK_FAKE_LLM=true` (deterministic fake
+verdicts, $0, for UI work). Chrome shortcuts can be changed in `chrome://extensions/shortcuts`.
+Tray menu: pause, check screen now, check part of screen, switch trigger/display modes, copy extension token, open
+logs, budget.
 
 ## Privacy and safety (short version)
 
