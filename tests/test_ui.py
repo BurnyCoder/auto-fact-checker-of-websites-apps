@@ -86,3 +86,38 @@ def test_overlay_paints_box_at_converted_position(qt):
     inside_far = image.pixelColor(int(600 * dpr), int(400 * dpr))
     assert inside_far.alpha() == 0                                 # rest of the overlay stays transparent
     overlay.close()
+
+
+def test_panel_card_is_readable_in_dark_mode(qt):
+    """Regression (2026-11-13, user screenshot): with Windows in dark mode the system palette's white text was drawn
+    on the card's white background, and links were pale cyan."""
+    from PySide6.QtGui import QColor, QPalette
+
+    from factcheck.ui.panel import ClaimCard
+
+    old = qt.palette()
+    dark = QPalette(old)
+    for role in (QPalette.ColorRole.WindowText, QPalette.ColorRole.Text):
+        dark.setColor(role, QColor("white"))
+    dark.setColor(QPalette.ColorRole.Link, QColor("#9be7ff"))
+    qt.setPalette(dark)
+    try:
+        card = ClaimCard(lambda _cid: None)
+        src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
+        claim = Claim(id="c", text="Joe Cahill died in 2004.", span="s", block_id="b", source=src)
+        card.update_from(claim, verdict(label="Supported", corrected_claim=None,
+                                        sources=[VerdictSource(url="https://a.org", title="A", supports="verdict")]))
+        card.ensurePolished()
+        card.label.ensurePolished()
+        text = card.label.palette().color(QPalette.ColorRole.WindowText)
+        assert text.lightness() < 80                       # dark text on the white card
+        assert "color:#1a73e8" in card.label.text()        # links get a fixed, readable blue
+    finally:
+        qt.setPalette(old)
+
+
+def test_card_puts_the_label_pill_on_its_own_line():
+    src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
+    claim = Claim(id="c", text="x", span="s", block_id="b", source=src)
+    out = card_html(claim, verdict(label="Supported", corrected_claim=None))
+    assert "</div><div><span" in out                     # the source line and the pill are separate blocks

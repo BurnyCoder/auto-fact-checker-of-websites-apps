@@ -27,10 +27,14 @@ MAX_CARDS = 150
 e = html.escape
 
 
+TEXT, LINK = "#202124", "#1a73e8"   # fixed colours: the card is always white, whatever the Windows theme
+
+
 def _link(url: str, text: str) -> str:
     if not url.startswith(("http://", "https://")):
         return e(text or url)
-    return f'<a href="{e(url, quote=True)}">{e(text or url)}</a>'
+    # inline colour: QLabel otherwise uses the palette's Link role, pale cyan in Windows dark mode (unreadable on white)
+    return f'<a href="{e(url, quote=True)}" style="color:{LINK}">{e(text or url)}</a>'
 
 
 def card_html(claim, verdict) -> str:
@@ -43,8 +47,8 @@ def card_html(claim, verdict) -> str:
     pct = round(verdict.confidence * 100)
     parts = [
         f"<div style='color:#5f6368'>{src}</div>",
-        (f"<span style='background:{colour};color:white;padding:1px 6px;border-radius:8px'><b>{e(verdict.label)}</b></span>"
-         f"&nbsp; <b>{pct}%</b> confidence"),
+        (f"<div><span style='background:{colour};color:white;padding:1px 6px;border-radius:8px'><b>{e(verdict.label)}</b>"
+         f"</span>&nbsp; <b>{pct}%</b> confidence</div>"),          # own block: Qt ran it into the source line
         f"<div style='margin-top:4px'><b>{e(claim.text)}</b></div>",
         f"<div><i>Why this confidence:</i> {e(verdict.confidence_reasoning)}</div>",
         f"<div style='margin-top:3px'>{e(verdict.explanation)}</div>",
@@ -73,7 +77,10 @@ class ClaimCard(QFrame):
     def __init__(self, on_check: Callable[[str], None]):
         super().__init__()
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("ClaimCard { background: white; border: 1px solid #dadce0; border-radius: 8px; }")
+        # Text colour is set with the background: in Windows dark mode the inherited palette text is white, which
+        # made the card's text invisible on white (user screenshot, 2026-11-13).
+        self.setStyleSheet("ClaimCard { background: white; border: 1px solid #dadce0; border-radius: 8px; }"
+                           f"ClaimCard QLabel {{ color: {TEXT}; background: transparent; }}")
         layout = QVBoxLayout(self)
         self.label = QLabel()
         self.label.setWordWrap(True)

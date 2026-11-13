@@ -108,6 +108,7 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
                 await ws.send_text(to_json(await queue.get()))
 
         sender = asyncio.create_task(pump())
+        close_code = None                                  # 1000 = extension closed it, 1001 = worker/browser went away
         try:
             while True:
                 try:
@@ -116,7 +117,9 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
                     continue                               # ignore malformed frames
                 if isinstance(msg, dict):
                     await handle(msg, conn, ws)
-        except (WebSocketDisconnect, RuntimeError):
+        except WebSocketDisconnect as exc:
+            close_code = exc.code
+        except RuntimeError:
             pass
         finally:
             sender.cancel()
@@ -124,7 +127,7 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
             for sid in [s for s, c in hub.owner.items() if c == conn]:
                 hub.owner.pop(sid, None)
                 service.cancel_source(sid)
-            log.info("extension disconnected (%d live)", len(hub.queues))
+            log.info("extension disconnected (code %s, %d live)", close_code, len(hub.queues))
 
     async def handle(msg: dict, conn: int, ws: WebSocket) -> None:
         kind = msg.get("type")
