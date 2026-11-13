@@ -234,6 +234,74 @@ def test_dark_scheme_gives_dark_cards(qt):
     panel.close()
 
 
+def test_to_physical_maps_a_drag_to_monitor_pixels():
+    """Local (logical) picker coordinates -> physical desktop pixels: the inverse of the overlay's mapping."""
+    from PySide6.QtCore import QPoint
+
+    from factcheck.capture import winapi
+    from factcheck.ui.region import to_physical
+
+    mon = winapi.Monitor(device="D", rect=winapi.Rect(-2560, -159, 2560, 1440), primary=False)
+    assert to_physical(QPoint(200, 100), QPoint(40, 20), mon, 1.5) == winapi.Rect(-2560 + 60, -159 + 30, 240, 120)
+    assert to_physical(QPoint(10, 10), QPoint(13, 12), mon, 1.0) is None          # a click, not a box
+
+
+def test_region_picker_returns_the_dragged_rect_after_closing(qt):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtTest import QTest
+
+    from factcheck.capture import winapi
+    from factcheck.ui.region import RegionPickerManager
+
+    screen = QGuiApplication.primaryScreen()
+    geo, dpr = screen.geometry(), screen.devicePixelRatio()
+    mon = winapi.Monitor(device="T", rect=winapi.Rect(100, 200, round(geo.width() * dpr), round(geo.height() * dpr)),
+                         primary=True)
+    manager = RegionPickerManager(monitors=lambda: [mon])
+    done, cancelled = [], []
+    manager.pick(on_done=lambda r: done.append((r, picker.isVisible())), on_cancel=lambda: cancelled.append(1))
+    picker = manager.pickers[0]
+    assert picker.isVisible()
+    QTest.mousePress(picker, Qt.MouseButton.LeftButton, pos=QPoint(10, 20))
+    QTest.mouseMove(picker, QPoint(110, 70))
+    QTest.mouseRelease(picker, Qt.MouseButton.LeftButton, pos=QPoint(110, 70))
+    rect, visible_at_callback = done[0]
+    assert rect == winapi.Rect(100 + round(10 * dpr), 200 + round(20 * dpr), round(100 * dpr), round(50 * dpr))
+    assert not visible_at_callback and not manager.pickers      # closed before the screenshot is taken
+    assert not cancelled
+
+    manager.pick(on_done=done.append, on_cancel=lambda: cancelled.append(1))
+    QTest.keyClick(manager.pickers[0], Qt.Key.Key_Escape)
+    assert cancelled == [1] and len(done) == 1 and not manager.pickers
+
+    manager.pick(on_done=done.append, on_cancel=lambda: cancelled.append(1))
+    QTest.mouseClick(manager.pickers[0], Qt.MouseButton.LeftButton, pos=QPoint(30, 30))   # a click cancels
+    assert cancelled == [1, 1] and len(done) == 1
+
+
+def test_hotkey_filter_dispatches_each_binding(qt, monkeypatch):
+    """Two global hotkeys (Ctrl+Alt+F whole screen, Ctrl+Alt+R region) share one native event filter."""
+    import ctypes
+    from ctypes import wintypes
+
+    import factcheck.ui.hotkey as hk
+
+    monkeypatch.setattr(hk.winapi, "register_hotkey", lambda _id, _spec: True)   # the running app holds the real keys
+    monkeypatch.setattr(hk.winapi, "unregister_hotkey", lambda _id: None)
+    hits = []
+    hotkeys = hk.HotkeyFilter([("ctrl+alt+f", lambda: hits.append("screen")), ("ctrl+alt+r", lambda: hits.append("region"))])
+    msg = wintypes.MSG()
+    msg.message, msg.wParam = hk.winapi.WM_HOTKEY, hk.HOTKEY_ID + 1
+    assert hotkeys.nativeEventFilter(b"windows_generic_MSG", ctypes.addressof(msg)) == (True, 0)
+    msg.wParam = hk.HOTKEY_ID
+    hotkeys.nativeEventFilter(b"windows_generic_MSG", ctypes.addressof(msg))
+    msg.wParam = 0x1234                                        # someone else's hotkey: not ours
+    assert hotkeys.nativeEventFilter(b"windows_generic_MSG", ctypes.addressof(msg)) == (False, 0)
+    assert hits == ["region", "screen"]
+    hotkeys.close()
+
+
 def test_card_puts_the_label_pill_on_its_own_line():
     src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
     claim = Claim(id="c", text="x", span="s", block_id="b", source=src)

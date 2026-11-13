@@ -28,6 +28,7 @@ from factcheck.pipeline.sandbox import sandbox_available
 from factcheck.ui.hotkey import HotkeyFilter
 from factcheck.ui.overlay import OverlayManager
 from factcheck.ui.panel import Panel
+from factcheck.ui.region import RegionPickerManager
 from factcheck.ui.state import Bridge, UiState
 from factcheck.ui.tray import Tray
 
@@ -64,6 +65,15 @@ def build_ui(settings: Settings, backend: Backend, capture: DesktopCapture, qt: 
     def check_now() -> None:
         backend.call(capture.capture_now())
 
+    pickers = RegionPickerManager()
+
+    def check_part() -> None:
+        """Drag a box over part of the screen; only that part is read (the pickers close before the screenshot)."""
+        if capture.paused:
+            tray.showMessage("Fact check", "Capture is paused. Untick 'Pause capture' in the tray menu first.")
+            return
+        pickers.pick(on_done=lambda rect: backend.call(capture.capture_region(rect)))
+
     panel = Panel(state, on_check=lambda cid: backend.call_soon(backend.service.check, cid), status_text=status_text,
                   auto_checks=settings.max_auto_checks_per_batch)
     overlays = OverlayManager(state, debug_visible_in_capture=os.environ.get("FACTCHECK_OVERLAY_DEBUG") == "1")
@@ -79,19 +89,23 @@ def build_ui(settings: Settings, backend: Backend, capture: DesktopCapture, qt: 
         hotkey_enabled[0] = mode in ("hotkey", "both")
 
     hotkey_enabled = [settings.factcheck_mode in ("hotkey", "both")]
-    hotkey = HotkeyFilter(settings.hotkey, lambda: check_now() if hotkey_enabled[0] else None)
+    # Ctrl+Alt+F follows the trigger mode; the region hotkey is always on (dragging a box is an explicit request)
+    hotkey = HotkeyFilter([(settings.hotkey, lambda: check_now() if hotkey_enabled[0] else None),
+                           (settings.region_hotkey, check_part)])
 
     def copy_token() -> None:
         QGuiApplication.clipboard().setText(settings.server_token)
         tray.showMessage("Fact check", "Extension token copied. Paste it in the extension's Options page.")
 
     tray = Tray(mode=settings.factcheck_mode, display=settings.factcheck_display,
-                on_pause=lambda on: setattr(capture, "paused", on), on_check_now=check_now, on_mode=set_mode,
+                on_pause=lambda on: setattr(capture, "paused", on), on_check_now=check_now, on_check_part=check_part,
+                on_mode=set_mode,
                 on_display=set_display, on_show_panel=lambda: (panel.show(), panel.raise_(), panel.activateWindow()),
                 on_copy_token=copy_token, on_open_logs=lambda: os.startfile(settings.logs_dir),
                 budget_text=status_text, on_quit=qt.quit)
     set_display(settings.factcheck_display)
-    return {"state": state, "bridge": bridge, "panel": panel, "overlays": overlays, "hotkey": hotkey, "tray": tray}
+    return {"state": state, "bridge": bridge, "panel": panel, "overlays": overlays, "hotkey": hotkey, "tray": tray,
+            "pickers": pickers}
 
 
 def main() -> None:

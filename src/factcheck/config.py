@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     factcheck_mode: Literal["continuous", "hotkey", "both"] = "hotkey"   # check only when asked (user decision)
     factcheck_display: Literal["overlay", "panel", "both"] = "both"
     capture_interval_s: float = 2.0
-    hotkey: str = "ctrl+alt+f"
+    hotkey: str = "ctrl+alt+f"                  # check every monitor
+    region_hotkey: str = "ctrl+alt+r"           # drag a box over the part to check ("r" = region; Win+Shift+S is
+                                                # Windows' own Snipping Tool key)
     blocked_apps: str = "1password.exe,keepass.exe,bitwarden.exe,keepassxc.exe"
     server_port: int = 8765
     keep_agent_work: bool = False
