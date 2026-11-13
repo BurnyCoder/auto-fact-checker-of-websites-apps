@@ -142,7 +142,14 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
             asyncio.create_task(service.submit(source, blocks, auto=bool(msg.get("auto", True)),
                                                force=bool(msg.get("force", False))))
         elif kind == "check":
-            service.check(str(msg.get("claim_id", "")))
+            claim_id = str(msg.get("claim_id", ""))[:64]
+            if claim_id in service.claims:
+                service.check(claim_id)
+            else:                                          # e.g. a card from before the app was restarted
+                await ws.send_text(to_json({
+                    "type": "status", "source_id": str(msg.get("source_id", ""))[:200], "claim_id": claim_id,
+                    "status": "error",
+                    "message": "the app was restarted since this page was checked; press Alt+Shift+F to check it again"}))
         elif kind == "cancel":
             sid = str(msg.get("source_id", ""))
             if hub.owner.get(sid) == conn:

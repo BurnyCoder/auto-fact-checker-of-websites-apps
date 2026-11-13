@@ -102,13 +102,13 @@ chrome.runtime.onConnect.addListener((port) => {
   portSources.set(port, new Set());
   port.onMessage.addListener((msg) => {
     const sourceId = `tab${tabId}:${msg.docId || "doc"}`;    // unique per page load
+    ports.set(sourceId, port);                               // route replies (also after a worker restart)
+    portSources.get(port).add(sourceId);
     if (msg.type === "submit") {
-      ports.set(sourceId, port);
-      portSources.get(port).add(sourceId);
       send({ type: "submit", source: { source_id: sourceId, title: msg.title, url: msg.url },
              blocks: msg.blocks, auto: msg.auto, force: msg.force }, port);
     } else if (msg.type === "check") {
-      send({ type: "check", claim_id: msg.claimId }, port);
+      send({ type: "check", claim_id: msg.claimId, source_id: sourceId }, port);
     }
   });
   port.onDisconnect.addListener(() => {                      // tab closed or navigated: stop its work
