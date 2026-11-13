@@ -31,6 +31,7 @@ live web pages — never the held-out evaluation data.
 | 10 | WebSocket tests were rejected with "Invalid host header" | Starlette's TestClient uses `ws://testserver`; our TrustedHost middleware correctly rejected it | Tests use `ws://127.0.0.1/ws` | `tests/test_server.py` |
 | 11 | `uv sync` failed: "failed to remove … dist-info: Access is denied" | The folder carried the Windows read-only attribute | Removed the folder and re-synced | – |
 | 13 | All three concurrent eval processes (H1/H2, H3, E2) crashed at 19:10 with `JSONDecodeError: Extra data` | Their appends to the shared `budget_ledger.jsonl` interleaved; one record's head was overwritten, and every later budget check failed to parse the file (fail-safe: spending stopped) | Cross-process file lock (`msvcrt.locking` / `fcntl.flock`) around every ledger read and append; the damaged line was rebuilt exactly from the LLM log (run `3fad4b81a6`, $0.0251); an upper-bound adjustment ($0.208) was added for 20 calls cancelled by restarts and the crash whose cost was never reported; runs resumed from their result files | `tests/test_budget_agent.py::test_ledger_survives_concurrent_processes` (4 processes × 50 appends) |
+| 14 | In the user's real Chrome (2026-11-13), auto-check verified 0 of 3 claims on Wikipedia "Eiffel Tower" and 1 of 3 on "Mount Everest"; the rest stayed grey ("Not checked yet"), while "Check this claim" worked. Found with the Claude in Chrome extension: highlight counts read from `CSS.highlights`, LLM log showed no verify prompt for the missing claims, then a 6-second toast "BudgetExceeded: daily app budget $1.00 reached" was caught on screen | Each verification reserves its worst case ($0.21) before running. With $0.63 of the $1.00 daily app cap spent (mostly continuous desktop capture), the 2nd concurrent reservation reached $1.05 and was refused as if the cap were used up. The refusal was not logged, and the page painted errors like unchecked claims | `BudgetBusy` (subclass of `BudgetExceeded`) when only in-flight reservations block a call; `AgentRunner` waits and retries. Refusals are logged. The hover card shows "Couldn't check" with the reason and a *Try again* button. After the fix, on "Golden Gate Bridge" all 3 auto-checks finished (3 Supported) | `test_daily_cap_busy_is_not_exhausted`, `test_runner_waits_while_other_calls_hold_the_budget`, `test_failed_check_explains_why_in_the_card`; `docs/images/live-chrome-card.jpg` |
 | 12 | Pipeline of a single run looked 3× slower than the agent's own duration | Quote re-fetching (up to 15 s per page) and CLI start-up dominate per-task wall time | Raised eval concurrency (3 → 6 / 8); quote checks run in parallel | `results/*/progress.json` |
 
 ## Live end-to-end checks (real Haiku)
@@ -42,7 +43,15 @@ live web pages — never the held-out evaluation data.
 * Desktop path on a rendered chat (`scripts/demo_overlay.py`): "Great Wall visible from the Moon" → Refuted 0.93 with a
   correction; "Everest 8,849 m" → Supported 0.90; "7 % doubles in ~10 years" → Supported 0.93 via
   `ln 2 / ln 1.07 = 10.24` in the sandbox ($0.0007); opinions skipped (`docs/images/overlay-demo.png`).
-* Not verified: the hotkey over a real Discord window on the real screen (computer-use access was declined).
+* User's own setup (2026-11-13), checked with computer use and the Claude in Chrome extension: the server logged
+  "extension connected", which happens only after the Origin (extension ID) and token checks pass. So the
+  README steps (tray → *Copy extension token* → *Load unpacked* → Options) worked as written. The hover card, *Check this
+  claim* and auto-check (after fix #14) worked on live Wikipedia pages (`docs/images/live-chrome-card.jpg`).
+  Not clicked by the agent itself: the tray's right-click menu and `chrome://extensions`. The computer-use tool grants
+  the taskbar left-click only and Chrome read-only, and the Chrome extension cannot open `chrome://` or other
+  extensions' pages.
+* Desktop path: continuous capture produced claims from real Discord windows (LLM log, `Source app: discord.exe`).
+  Not verified: visual alignment of the overlay boxes on a real Discord window.
 
 ## Hyperparameters and why
 
