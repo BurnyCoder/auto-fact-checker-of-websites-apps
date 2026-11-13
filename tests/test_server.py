@@ -80,6 +80,18 @@ def test_submit_relays_claims_and_verdicts(client):
         assert 0 <= verdict["confidence"] <= 1 and verdict["confidence_reasoning"]
 
 
+
+def test_check_of_unknown_claim_explains_instead_of_hanging(client):
+    """Regression (2026-11-13): after an app restart, "Try again" on an old card asked for a claim the new app had never
+    seen; nothing came back and the card stayed "Checking…" forever."""
+    with client.websocket_connect(WS, headers={"origin": ORIGIN}) as ws:
+        ws.send_text(json.dumps({"type": "auth", "token": client.settings.server_token}))
+        assert json.loads(ws.receive_text())["type"] == "hello"
+        ws.send_text(json.dumps({"type": "check", "claim_id": "c0ffee", "source_id": "tab7:doc"}))
+        msg = json.loads(ws.receive_text())
+        assert (msg["type"], msg["source_id"], msg["claim_id"], msg["status"]) == ("status", "tab7:doc", "c0ffee", "error")
+        assert "Alt+Shift+F" in msg["message"]
+
 def test_backend_stop_cancels_startup_tasks(settings):
     """Regression (2026-11-13): quitting left the capture loop pending ("Task was destroyed but it is pending!")."""
     import asyncio
