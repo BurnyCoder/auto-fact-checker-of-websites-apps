@@ -73,16 +73,17 @@ in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-
 
 * **Two capture paths**
   * Chrome/Chromium **MV3 extension**: exact page text, inline underlines via the CSS Custom Highlight API
-    (no DOM edits), hover card with full verdict, auto mode / `Alt+Shift+F` / right-click "Fact-check selected text".
-  * **Desktop OCR** (Windows.Media.Ocr): `Ctrl+Alt+F` checks everything on all monitors; continuous mode checks the
-    foreground window when it settles. Lines are grouped into messages/paragraphs before extraction.
+    (no DOM edits), hover card with full verdict. Checks start only when you ask: toolbar button *Check this page
+    now*, `Alt+Shift+F`, or right-click "Fact-check selected text" (automatic checking while reading is an option).
+  * **Desktop OCR** (Windows.Media.Ocr): `Ctrl+Alt+F` or the tray's *Check screen now* checks everything on all
+    monitors; the optional continuous mode checks the foreground window when it settles. Lines are grouped into messages/paragraphs before extraction.
 * **Display**: per-monitor click-through **overlay** (colour = label, border width = confidence, tag "Refuted 93 %")
   and/or a **side panel** with label, confidence + reasoning, explanation, correction, sources (✓ quote found /
   ✗ not found / not checked), sandbox computations, and a "Check this claim" button.
 * **Agent tools**: built-in WebSearch + WebFetch; `fetch_file` (raw CSV/JSON/XLSX/PDF/HTML into a per-claim `/work`
   folder, public internet only, SSRF-safe); `bash` in an offline bubblewrap sandbox with every interpreter/compiler
   in WSL.
-* **Cost control**: hard project budget (default $10 API-equivalent) in a committed [`budget_ledger.jsonl`](budget_ledger.jsonl),
+* **Cost control**: hard project budget (default $20 API-equivalent; the evaluation ran under $10) in a committed [`budget_ledger.jsonl`](budget_ledger.jsonl),
   daily app cap, verdict cache, auto-check of only the first 3 new claims per batch, ≤ 2 web searches per claim.
 * **Auth**: your Claude subscription login first; API key from `.env` only as automatic fallback.
 * **Logging**: every prompt, tool call, tool output and result is written uncut to `logs/llm-*.jsonl` and the terminal.
@@ -113,8 +114,9 @@ What happens when you run it:
 
 1. `uv run factcheck` starts the Qt app (tray icon) and a background asyncio thread with the localhost server,
    the fact-check service and the capture loop.
-2. Text arrives from the extension (visible paragraphs of the page) or from OCR (hotkey: all monitors;
-   continuous: the foreground window, after two identical frames).
+2. When you press the toolbar button / `Alt+Shift+F` (Chrome) or `Ctrl+Alt+F` (desktop), text arrives from the
+   extension (visible paragraphs of the page) or from OCR (all monitors). Optional automatic modes send it while you
+   read (extension option; `FACTCHECK_MODE=continuous|both`: the foreground window, after two identical frames).
 3. New blocks go to the **extractor** (one Haiku call, no tools) which returns atomic claims with exact spans.
 4. Cached claims are answered immediately; the first 3 new ones are queued for **verification**, the rest wait
    for a click. Each verification runs in its own CLI subprocess with an isolated config, a fresh `/work` folder,
@@ -152,16 +154,18 @@ copy .env.example .env
      `dkfijekfdkhfpkbidoifbdibdihhcgcp` (the local server only accepts that ID).
   4. On the card click *Details* → *Extension options*, paste the token (Ctrl+V) into *Extension token*, click *Save*;
      the status line should read "Connected to the local app ✓".
-  5. Open an article: claims get a dotted underline. Up to 3 claims from each newly visible part of the page
-     (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red / amber / grey as verdicts arrive. The rest wait for *Check this
-     claim* in the hover card. After editing `extension/`, click
-     the reload arrow on the extension's card in `chrome://extensions`.
-* **Budget:** `TOTAL_BUDGET_USD` (default 10) is one cap for everything recorded in `budget_ledger.jsonl`, including
-  the development and benchmark spend of this repo; raise it in `.env` before regular use. `DAILY_APP_BUDGET_USD`
+  5. Open an article and press `Alt+Shift+F` (or click the extension's toolbar button → *Check this page now*).
+     Claims get a dotted underline; up to 3 of them (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red / amber / grey as
+     verdicts arrive, the rest wait for *Check this claim* in the hover card. Nothing is sent before you ask, unless
+     you tick *Check pages automatically* in Options. If the app is not running, a message says so.
+  6. After updating `extension/` (e.g. `git pull`), click the reload arrow on the extension's card in
+     `chrome://extensions`; reload open tabs, or just press the shortcut there (the extension re-attaches itself).
+* **Budget:** `TOTAL_BUDGET_USD` (default 20) is one cap for everything recorded in `budget_ledger.jsonl`, including
+  the development and benchmark spend of this repo. `DAILY_APP_BUDGET_USD`
   (default 1) caps the app per day, and each check first reserves its worst case ($0.21). When the cap is used up,
   the hover card says "Couldn't check: daily app budget … reached": raise the value in `.env` and restart the app.
-  `FACTCHECK_MODE=continuous|both` checks new text in every window you look at (chat apps included), so it uses the
-  cap fastest; `hotkey` checks only when you press `Ctrl+Alt+F`.
+  The default `FACTCHECK_MODE=hotkey` checks only when you press `Ctrl+Alt+F`; `continuous|both` check new text in
+  every window you look at (chat apps included) and use the cap fastest.
 
 ![Live verdict card in Chrome on the Wikipedia "Golden Gate Bridge" article (real Haiku verdict, 2026-11-13)](docs/images/live-chrome-card.jpg)
 
@@ -174,7 +178,7 @@ uv run factcheck-cli text "Paste a paragraph; every check-worthy claim in it is 
 uv run factcheck-cli budget                       # API-equivalent spend so far
 ```
 
-Settings live in `.env` (see [`.env.example`](.env.example)): `FACTCHECK_MODE=continuous|hotkey|both`,
+Settings live in `.env` (see [`.env.example`](.env.example)): `FACTCHECK_MODE=hotkey|continuous|both` (default hotkey),
 `FACTCHECK_DISPLAY=overlay|panel|both`, `TOTAL_BUDGET_USD`, `DAILY_APP_BUDGET_USD`, `MAX_WEB_SEARCHES`,
 `BLOCKED_APPS`, `HOTKEY`, `FACTCHECK_FAKE_LLM=true` (deterministic fake verdicts, $0, for UI work).
 Tray menu: pause, check screen now, switch trigger/display modes, copy extension token, open logs, budget.

@@ -13,6 +13,25 @@
 Cross-thread communication: backend → UI through a Qt `Signal` (`ui/state.Bridge`, queued delivery);
 UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsafe` (`Backend.call*`).
 
+## Extension connection model (`extension/service_worker.js`, `content.js`)
+
+* **Triggers.** By default nothing leaves a page until the user asks: toolbar button *Check this page now*,
+  `Alt+Shift+F` (`commands`), or the right-click item. *Check pages automatically* in Options restores the
+  automatic mode (on load, scroll and DOM changes).
+* **On demand only.** The worker opens the WebSocket only when there is work (a check, or the popup/Options asking for
+  the status), and only after `GET /health` answers. A WebSocket handshake to a closed port logs
+  `net::ERR_CONNECTION_REFUSED` in `chrome://extensions` on every attempt; a failed `fetch()` logs nothing (both
+  measured over CDP). There is no reconnect loop. When the app drops a connection it cancels that connection's work,
+  so the worker tells the waiting pages ("the fact-check app is not running …") instead of retrying.
+* **Reloads.** Chrome does not re-inject content scripts into open tabs when an extension is reloaded or removed. The
+  copy left behind ("orphaned": `chrome.runtime.id` is gone and API calls throw "Extension context invalidated")
+  removes its highlights and card on its next disconnect or mouse move. The worker's `askTab()` injects a fresh copy
+  (`chrome.scripting` with `activeTab`, granted by the shortcut, toolbar button and context menu:
+  [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)) when a tab has no live content
+  script, instead of failing with "Receiving end does not exist".
+* Regression test: `tests/test_extension_e2e.py::test_no_extension_errors_when_app_is_down_or_extension_reloaded`
+  reads console errors, exceptions and log entries of the worker and the page over CDP.
+
 ## Events (`FactCheckService.emit`)
 
 | type | fields | consumers |
