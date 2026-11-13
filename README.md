@@ -194,6 +194,9 @@ uv run factcheck                                  # desktop app (tray, overlay, 
 uv run factcheck-cli claim "Water boils at 90 °C at sea level."
 uv run factcheck-cli text "Paste a paragraph; every check-worthy claim in it is verified."
 uv run factcheck-cli budget                       # API-equivalent spend so far
+uv run python scripts/render_ui_images.py         # README UI images (panel dark/light, region picker), $0
+uv run python scripts/demo_overlay.py             # overlay + panel demo images, real Haiku on a rendered chat
+uv run python scripts/demo_extension.py https://en.wikipedia.org/wiki/Great_Wall_of_China   # Chrome demo image
 ```
 
 Settings live in `.env` (see [`.env.example`](.env.example)): `FACTCHECK_MODE=hotkey|continuous|both` (default hotkey),
