@@ -24,7 +24,10 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
   (`Range.getClientRects`). Whole blocks are sent either way, so claims keep their context and underlines map to
   exact ranges. The right-click item uses `checkRange` too. A checked selection is cleared (otherwise the next press
   silently re-checked it instead of opening the box), each part check toasts what it is checking, and the key
-  closes an open picker.
+  closes an open picker. Picks keep blocks down to 8 characters (page checks: 40), send only the picked text nodes
+  of a block over 4,000 characters, and count text as inside the box only where `elementFromPoint` shows it is on
+  top (text scrolled out of a container or covered by another element is left out). Text with no DOM (canvas,
+  images, cross-origin frames) can only be read with the desktop `Ctrl+Alt+R`, and the empty-pick message says so.
 * **On demand only.** The worker opens the WebSocket only when there is work (a check, or the popup/Options asking for
   the status), and only after `GET /health` answers. A WebSocket handshake to a closed port logs
   `net::ERR_CONNECTION_REFUSED` in `chrome://extensions` on every attempt; a failed `fetch()` logs nothing (both
