@@ -323,6 +323,24 @@ def test_panel_check_all_presses_every_check_button(qt):
     panel.close()
 
 
+def test_overlay_tag_never_covers_another_claim():
+    """README overlay demo: with two claims on one chat line, the first claim's tag ("Supported 90%") was drawn to its
+    right, over the second claim's text. A tag goes right only if that spot is free, otherwise above the claim."""
+    from PySide6.QtCore import QRectF
+
+    from factcheck.ui.overlay import place_tag
+
+    first = QRectF(100, 200, 280, 22)                            # "Mount Everest is 8,849 metres tall"
+    other = QRectF(400, 200, 230, 22)                            # "they re-measured it in 2020", same line
+    tag = place_tag(first, first, 90, 1000, [first, other])
+    assert not tag.intersects(other) and not tag.intersects(first)
+    assert tag.bottom() <= first.top()                            # above the claim
+    alone = place_tag(first, first, 90, 1000, [first])
+    assert alone.left() > first.right()                           # free spot: to the right, as before
+    edge = place_tag(QRectF(900, 200, 80, 22), QRectF(900, 200, 80, 22), 90, 1000, [])
+    assert edge.right() <= 1000                                   # no room on the right: above
+
+
 def test_card_puts_the_label_pill_on_its_own_line():
     src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
     claim = Claim(id="c", text="x", span="s", block_id="b", source=src)
