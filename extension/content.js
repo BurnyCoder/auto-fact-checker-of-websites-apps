@@ -69,12 +69,14 @@
     observer.disconnect();
     window.removeEventListener("scroll", onScroll);
     document.removeEventListener("mousemove", onMove);
+    window.removeEventListener("keydown", onPickKey, true);
   }
 
   // ---------------------------------------------------------------------------- block collection
   // A block = the nearest non-inline ancestor of some text nodes; its text is ONLY those text nodes
   // (not nested blocks), so nested containers never duplicate text and offsets map 1:1 to Range positions.
-  function collectBlocks(onlyVisible, within = document.body) {
+  // `keep(el, nodes)`, when given, limits the blocks to a part of the page (selected text or a dragged box).
+  function collectBlocks(onlyVisible, within = document.body, keep = null) {
     const displayCache = new Map();
     const isBlockish = (el) => {
       if (!displayCache.has(el)) displayCache.set(el, !/^(inline|contents)/.test(getComputedStyle(el).display));
@@ -106,6 +108,7 @@
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.bottom < -200 || r.top > innerHeight + 200) continue;
       }
+      if (keep && !keep(el, nodes)) continue;
       let id = blockIdOf.get(el);
       if (!id) { id = `b${nextBlock++}`; blockIdOf.set(el, id); }
       blocks.set(id, { el, nodes });
@@ -119,7 +122,7 @@
   const AUTO_MIN_GAP_MS = 5000, AUTO_MAX_PER_PAGE = 40;
   let lastAuto = 0, autoCount = 0, autoPaused = false;
 
-  function submit(force, onlyVisible = true, within = document.body) {
+  function submit(force, onlyVisible = true, within = document.body, keep = null) {
     if (siteBlocked) { if (force) toast("this site is on your never-check list (extension Options)"); return; }
     if (!force) {
       if (autoPaused || hasPasswordField()) return;     // never auto-send login/vault pages
@@ -128,9 +131,9 @@
       if (++autoCount > AUTO_MAX_PER_PAGE) { autoPaused = true; toast("auto-check paused on this busy page; press Alt+Shift+F to check it"); return; }
       lastAuto = now;
     }
-    const all = collectBlocks(onlyVisible, within);
+    const all = collectBlocks(onlyVisible, within, keep);
     const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
-    if (!fresh.length) return;
+    if (!fresh.length) { if (force) toast(keep ? "No text to check in that part" : "No text to check on this page"); return; }
     for (const b of fresh) sentTexts.set(b.id, b.text);
     post({ type: "submit", title: document.title, url: location.href, blocks: fresh, auto: autoMode || force, force });
   }
@@ -230,9 +233,9 @@
   // Colours follow the browser's light/dark preference (prefers-color-scheme), with the same light and dark sets as
   // the desktop side panel (ui/panel.py: Material light, Windows 11 dark surfaces + Material dark text/link tones).
   shadow.innerHTML = `<style>
-    .card,.toast{--bg:#fff;--fg:#202124;--muted:#5f6368;--line:#dadce0;--link:#1a73e8;--quote:#3c4043;--corr:#fef7e0;
+    .card,.toast,.pick{--bg:#fff;--fg:#202124;--muted:#5f6368;--line:#dadce0;--link:#1a73e8;--quote:#3c4043;--corr:#fef7e0;
       --code:#f1f3f4;--track:#eee;--btn:#1a73e8;--btn-fg:#fff;--toast:#202124;--toast-fg:#fff}
-    @media (prefers-color-scheme: dark){.card,.toast{--bg:#2b2b2b;--fg:#e8eaed;--muted:#9aa0a6;--line:#454545;
+    @media (prefers-color-scheme: dark){.card,.toast,.pick{--bg:#2b2b2b;--fg:#e8eaed;--muted:#9aa0a6;--line:#454545;
       --link:#8ab4f8;--quote:#bdc1c6;--corr:#3a3222;--code:#202020;--track:#454545;--btn:#8ab4f8;--btn-fg:#202124;
       --toast:#e8eaed;--toast-fg:#202124}}
     .card{position:fixed;max-width:420px;max-height:70vh;overflow:auto;background:var(--bg);color:var(--fg);border:1px solid var(--line);
@@ -247,10 +250,16 @@
     pre{white-space:pre-wrap;background:var(--code);border-radius:6px;padding:6px;font-size:11px;margin:4px 0}
     button{margin-top:8px;background:var(--btn);color:var(--btn-fg);border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
     .toast{position:fixed;right:16px;bottom:16px;background:var(--toast);color:var(--toast-fg);padding:8px 12px;border-radius:8px;font:13px system-ui;display:none}
-  </style><div class="card" part="card"></div><div class="toast"></div>`;
+    .pick{position:fixed;inset:0;cursor:crosshair;background:rgba(0,0,0,.25);display:none}
+    .pick .box{position:fixed;border:2px solid var(--btn);background:rgba(255,255,255,.08);display:none}
+    .pick .hint{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:var(--toast);color:var(--toast-fg);
+      padding:6px 12px;border-radius:8px;font:13px system-ui;pointer-events:none}
+  </style><div class="card" part="card"></div><div class="toast"></div>
+  <div class="pick"><div class="box"></div><div class="hint">Drag over the part to fact-check · Esc to cancel</div></div>`;
   document.documentElement.appendChild(host);
   const cardEl = shadow.querySelector(".card");
   const toastEl = shadow.querySelector(".toast");
+  const pickEl = shadow.querySelector(".pick"), pickBox = shadow.querySelector(".pick .box");
   const card = { claimId: null, x: 0, y: 0, hideTimer: null };
 
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -364,6 +373,78 @@
     setTimeout(() => { toastEl.style.display = "none"; }, 6000);
   }
 
+  // ---------------------------------------------------------------------------- check part of the page
+  // Alt+Shift+S / popup "Check part of page…" / right-click "Fact-check selected text". Whole blocks (paragraphs)
+  // are sent, as for a page check, so claims keep their context and underlines map to exact DOM ranges.
+  const PICK_MIN_PX = 8;                 // a smaller box is a click, which cancels (same rule as the desktop picker)
+  let pickFrom = null;
+
+  // Blocks with a text node inside the selection (https://developer.mozilla.org/en-US/docs/Web/API/Range/intersectsNode),
+  // instead of every block under the selection's common ancestor, which for a multi-paragraph selection was the
+  // whole article (e2e test, 2026-11-13).
+  function checkRange(range) {
+    submit(true, false, document.body, (_el, nodes) => nodes.some((n) => range.intersectsNode(n)));
+  }
+
+  // True when any line box of a text node overlaps the box (client coordinates;
+  // https://developer.mozilla.org/en-US/docs/Web/API/Range/getClientRects).
+  function textTouches(node, box) {
+    const r = document.createRange();
+    r.selectNodeContents(node);
+    return [...r.getClientRects()].some((c) => c.right > box.left && c.left < box.right && c.bottom > box.top && c.top < box.bottom);
+  }
+
+  const boxOf = (a, b) => ({ left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) });
+
+  function startPicker() {
+    pickFrom = null;
+    pickBox.style.display = "none";
+    pickEl.style.display = "block";
+    if (debugExpose) host.dataset.debugPicking = "1";        // test-only mirror (closed shadow root)
+    window.addEventListener("keydown", onPickKey, true);     // capture phase: Esc reaches us before the page
+  }
+
+  function stopPicker() {
+    pickFrom = null;
+    pickEl.style.display = "none";
+    delete host.dataset.debugPicking;
+    window.removeEventListener("keydown", onPickKey, true);
+  }
+
+  function onPickKey(e) {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    stopPicker();
+  }
+
+  pickEl.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();                                       // no text selection while dragging
+    pickFrom = { x: e.clientX, y: e.clientY };
+  });
+  pickEl.addEventListener("mousemove", (e) => {
+    if (!pickFrom) return;
+    const b = boxOf(pickFrom, { x: e.clientX, y: e.clientY });
+    Object.assign(pickBox.style, { display: "block", left: `${b.left}px`, top: `${b.top}px`,
+                                   width: `${b.right - b.left}px`, height: `${b.bottom - b.top}px` });
+  });
+  pickEl.addEventListener("mouseup", (e) => {
+    if (!pickFrom) return;
+    const b = boxOf(pickFrom, { x: e.clientX, y: e.clientY });
+    stopPicker();
+    if (b.right - b.left < PICK_MIN_PX || b.bottom - b.top < PICK_MIN_PX) return;
+    submit(true, false, document.body, (_el, nodes) => nodes.some((n) => textTouches(n, b)));
+  });
+  pickEl.addEventListener("contextmenu", (e) => { e.preventDefault(); stopPicker(); });   // right-click cancels
+
+  function checkPart() {
+    if (siteBlocked) return toast("this site is on your never-check list (extension Options)");
+    const sel = getSelection();
+    if (sel && sel.rangeCount && !sel.isCollapsed) checkRange(sel.getRangeAt(0));
+    else startPicker();
+  }
+
   // ---------------------------------------------------------------------------- triggers
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   const onScroll = debounce(() => { if (autoMode) submit(false); }, 1200);
@@ -389,12 +470,10 @@
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     settingsReady.then(() => {
       if (msg.type === "checkPage") submit(true);
-      if (msg.type === "checkSelection") {
+      if (msg.type === "checkPart") checkPart();
+      if (msg.type === "checkSelection") {                    // right-click menu: only shown when text is selected
         const sel = getSelection();
-        if (sel && sel.rangeCount) {
-          const anc = sel.getRangeAt(0).commonAncestorContainer;
-          submit(true, false, anc.nodeType === 1 ? anc : anc.parentElement);
-        }
+        if (sel && sel.rangeCount && !sel.isCollapsed) checkRange(sel.getRangeAt(0));
       }
       reply({ ok: true });                        // lets the sender know a live content script handled it
     });
