@@ -75,7 +75,8 @@ in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-
   * Chrome/Chromium **MV3 extension**: exact page text, inline underlines via the CSS Custom Highlight API
     (no DOM edits), hover card with full verdict. Checks start only when you ask: toolbar button *Check this page
     now* or `Alt+Shift+F` (the visible page); *Check part of page…* or `Alt+Shift+S` (the paragraphs your selection
-    touches, or, with nothing selected, a box you drag over the page); right-click "Fact-check selected text".
+    touches, or, with nothing selected, a box you drag over the page; a checked selection is cleared, so the next
+    press opens the box, and pressing it again closes the box); right-click "Fact-check selected text".
     Automatic checking while reading is an option.
   * **Desktop OCR** (Windows.Media.Ocr): `Ctrl+Alt+F` or the tray's *Check screen now* checks everything on all
     monitors, except windows it must not read (the app's own panel, blocked apps, private windows, and Chrome while

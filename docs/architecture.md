@@ -22,7 +22,9 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
   `checkRange` keeps the blocks with a text node the selection intersects (`Range.intersectsNode`); otherwise a box
   picker opens inside the closed shadow root and keeps the blocks with a text line box overlapping the box
   (`Range.getClientRects`). Whole blocks are sent either way, so claims keep their context and underlines map to
-  exact ranges. The right-click item uses `checkRange` too.
+  exact ranges. The right-click item uses `checkRange` too. A checked selection is cleared (otherwise the next press
+  silently re-checked it instead of opening the box), each part check toasts what it is checking, and the key
+  closes an open picker.
 * **On demand only.** The worker opens the WebSocket only when there is work (a check, or the popup/Options asking for
   the status), and only after `GET /health` answers. A WebSocket handshake to a closed port logs
   `net::ERR_CONNECTION_REFUSED` in `chrome://extensions` on every attempt; a failed `fetch()` logs nothing (both
