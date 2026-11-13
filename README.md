@@ -158,6 +158,10 @@ wsl.exe -e bash scripts/setup_wsl_sandbox.sh
 copy .env.example .env
 ```
 
+* **Start it**: double-click **`Start Fact Check.cmd`** in the repo folder (or run `uv run factcheck`). It checks
+  that uv is installed, installs the dependencies on the first start, and says so if the app is already running.
+  For a desktop icon: right-click the file → *Send to* → *Desktop (create shortcut)*. Quit from the tray menu or by
+  closing its window.
 * **Auth**: nothing to do if Claude Code is logged in with your subscription (`AUTH_MODE=auto` uses it).
   Optionally put `ANTHROPIC_API_KEY` in `.env` as a fallback. The subscription mode is meant for personal,
   single-user use; the SDK docs ask distributed products to use API keys
@@ -191,6 +195,7 @@ copy .env.example .env
 
 ```bash
 uv run factcheck                                  # desktop app (tray, overlay, panel; Ctrl+Alt+F screen, Ctrl+Alt+R part)
+                                                  # or double-click "Start Fact Check.cmd"
 uv run factcheck-cli claim "Water boils at 90 °C at sea level."
 uv run factcheck-cli text "Paste a paragraph; every check-worthy claim in it is verified."
 uv run factcheck-cli budget                       # API-equivalent spend so far

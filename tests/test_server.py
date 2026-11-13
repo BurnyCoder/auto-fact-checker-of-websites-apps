@@ -137,3 +137,34 @@ async def asyncio_sleep_briefly():
     import asyncio
 
     await asyncio.sleep(0.2)
+
+
+def test_second_copy_detects_the_running_app():
+    """Double-clicking the launcher twice: the second copy must notice the first (GET /health names the app) and stop
+    at once, instead of failing to bind the port after a 20 s timeout with a traceback."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from factcheck.app import already_running
+
+    def serve(body: dict) -> ThreadingHTTPServer:
+        class Health(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(json.dumps(body).encode())
+
+            def log_message(self, *_):
+                pass
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Health)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv
+
+    ours, other = serve({"ok": True, "app": "fact-check-websites-apps"}), serve({"ok": True, "app": "something-else"})
+    try:
+        assert already_running(ours.server_port)
+        assert not already_running(other.server_port)            # another program on the port is not "us"
+    finally:
+        ours.shutdown()
+        other.shutdown()
+    assert not already_running(ours.server_port)                 # nothing listening

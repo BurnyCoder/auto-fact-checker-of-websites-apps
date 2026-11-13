@@ -11,10 +11,12 @@ Phases, in order:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
 import sys
+import urllib.request
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
@@ -33,6 +35,17 @@ from factcheck.ui.state import Bridge, UiState
 from factcheck.ui.tray import Tray
 
 log = logging.getLogger("factcheck.app")
+
+
+def already_running(port: int) -> bool:
+    """True when this app already answers on `port` (GET /health names it). A second copy (e.g. the launcher
+    double-clicked twice) cannot bind the port or the hotkeys, so it stops at once instead of failing after a
+    20 s timeout with a traceback. Another program on the port does not count."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1) as response:
+            return json.load(response).get("app") == "fact-check-websites-apps"
+    except (OSError, ValueError):                       # nothing listening, timeout, or not our JSON
+        return False
 
 
 def create_qt_app() -> QApplication:
@@ -111,6 +124,10 @@ def build_ui(settings: Settings, backend: Backend, capture: DesktopCapture, qt: 
 def main() -> None:
     settings = load_settings()
     setup_logging(settings.logs_dir, name="app")
+    if already_running(settings.server_port):
+        log.error("the fact-check app is already running (blue check-mark icon in the Windows tray); not starting "
+                  "a second copy")
+        sys.exit(2)                                     # exit code 2 = already running (Start Fact Check.cmd says so)
     ok, why = sandbox_available()
     log.info("starting: mode=%s display=%s fake=%s sandbox=%s", settings.factcheck_mode, settings.factcheck_display,
              settings.factcheck_fake_llm, "ok" if ok else why)
