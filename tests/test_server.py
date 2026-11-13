@@ -78,3 +78,31 @@ def test_submit_relays_claims_and_verdicts(client):
         assert claims[0]["span"] == "The tower is 330 m tall." and verdict["label"] in (
             "Supported", "Refuted", "Not Enough Evidence", "Conflicting Evidence/Cherrypicking")
         assert 0 <= verdict["confidence"] <= 1 and verdict["confidence_reasoning"]
+
+
+def test_backend_stop_cancels_startup_tasks(settings):
+    """Regression (2026-11-13): quitting left the capture loop pending ("Task was destroyed but it is pending!")."""
+    import asyncio
+    import socket
+    import threading
+
+    from factcheck.backend import Backend
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    settings.factcheck_fake_llm = True
+    cancelled = threading.Event()
+
+    async def loop_forever():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    backend = Backend(settings, port=port)
+    backend.add_startup_task(loop_forever)
+    backend.start()
+    backend.stop()
+    assert cancelled.is_set()
