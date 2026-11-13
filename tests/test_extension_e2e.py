@@ -244,6 +244,27 @@ def test_no_length_limits_short_and_huge_blocks(tmp_path, backend, page_server):
         page.wait_for_function(f"({TOAST})().includes('Ctrl+Alt+R')", timeout=5000)   # canvas text is not in the page
 
 
+def test_check_all_claims(tmp_path, backend, page_server):
+    """User (2026-11-13): "Check all claims" presses every "Check this claim" button: in the hover card of an unchecked
+    claim, and in the toolbar popup (askTab "checkAll")."""
+    backend.settings.max_auto_checks_per_batch = 1                # 1 automatic check, the other claims wait
+    pending = "() => CSS.highlights.get('fc-pending')?.size || 0"
+    with backend_page(tmp_path, backend, page_server, auto=False) as (worker, page):
+        press_check(worker, page)
+        page.wait_for_function(f"({VERDICTS})() === 1 && ({pending})() === 2", timeout=20000)
+        box = page.evaluate("() => { const r = document.createRange(); const p = document.querySelectorAll('p')[2];"
+                            " r.selectNodeContents(p.firstChild); const b = r.getClientRects()[0];"
+                            " return [b.left + 20, b.top + b.height / 2]; }")
+        page.mouse.move(*box)                                         # hover an unchecked claim
+        page.wait_for_function("() => !!document.querySelector('#fc-card-host').dataset.debugCard", timeout=5000)
+        assert "Check all 2" in page.evaluate("() => document.querySelector('#fc-card-host').dataset.debugCard")
+        ask_tab(worker, page, "checkAll")                             # the popup's "Check all claims on this page"
+        page.wait_for_function(f"({VERDICTS})() === 3 && ({pending})() === 0", timeout=20000)
+        assert "checking 2 claims" in page.evaluate(TOAST)
+        ask_tab(worker, page, "checkAll")
+        page.wait_for_function(f"({TOAST})().includes('No unchecked claims')", timeout=5000)
+
+
 def test_hover_card_follows_dark_mode(tmp_path, backend, page_server):
     """User (2026-11-13): no white backgrounds in dark mode. The card follows prefers-color-scheme."""
     colours = "() => document.querySelector('#fc-card-host').dataset.debugCardColors"

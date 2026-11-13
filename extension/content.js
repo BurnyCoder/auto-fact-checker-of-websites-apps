@@ -255,6 +255,7 @@
     .corr{background:var(--corr);border-radius:6px;padding:6px 8px;margin-top:6px}
     pre{white-space:pre-wrap;background:var(--code);border-radius:6px;padding:6px;font-size:11px;margin:4px 0}
     button{margin-top:8px;background:var(--btn);color:var(--btn-fg);border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+    button.all{margin-left:8px;background:transparent;color:var(--link);border:1px solid var(--line)}
     .toast{position:fixed;right:16px;bottom:16px;background:var(--toast);color:var(--toast-fg);padding:8px 12px;border-radius:8px;font:13px system-ui;display:none}
     .pick{position:fixed;inset:0;cursor:crosshair;background:rgba(0,0,0,.25);display:none}
     .pick .box{position:fixed;border:2px solid var(--btn);background:rgba(255,255,255,.08);display:none}
@@ -320,8 +321,14 @@
     } else if (rec.status !== "checking") {
       if (rec.error) cardEl.append(el("div", "h", "Why"), el("div", null, rec.error));   // e.g. the daily budget is used up
       const b = el("button", null, rec.error ? "Try again" : "Check this claim");
-      b.addEventListener("click", () => { post({ type: "check", claimId: rec.claim.id }); rec.status = "checking"; paint(rec); showCard(rec, x, y); });
+      b.addEventListener("click", () => { checkClaim(rec); showCard(rec, x, y); });
       cardEl.append(b);
+      const todo = unchecked().length;
+      if (todo > 1) {                                            // presses every Check / Try again button on the page
+        const all = el("button", "all", `Check all ${todo}`);
+        all.addEventListener("click", () => { checkAll(); showCard(rec, x, y); });
+        cardEl.append(all);
+      }
     }
     cardEl.style.display = "block";
     if (debugExpose) {                                           // test-only mirror (closed shadow root)
@@ -377,6 +384,25 @@
     toastEl.style.display = "block";
     if (debugExpose) host.dataset.debugToast = toastEl.textContent;   // test-only mirror (closed shadow root)
     setTimeout(() => { toastEl.style.display = "none"; }, 6000);
+  }
+
+  // ---------------------------------------------------------------------------- check claims on request
+  // Claims beyond the first few found are not verified automatically; each shows "Check this claim" (or "Try again"
+  // after an error). "Check all" presses every one of those buttons (user request, 2026-11-13).
+  const unchecked = () => [...claims.values()].filter((r) => !r.verdict && r.status !== "checking" && r.status !== "done");
+
+  function checkClaim(rec) {
+    post({ type: "check", claimId: rec.claim.id });
+    rec.status = "checking";
+    rec.error = null;
+    paint(rec);
+  }
+
+  function checkAll() {
+    const todo = unchecked();
+    if (!todo.length) return toast("No unchecked claims on this page. Press Alt+Shift+F to find claims first.");
+    for (const rec of todo) checkClaim(rec);
+    toast(`checking ${todo.length} claim${todo.length === 1 ? "" : "s"}`);
   }
 
   // ---------------------------------------------------------------------------- check part of the page
@@ -501,6 +527,7 @@
     settingsReady.then(() => {
       if (msg.type === "checkPage") submit(true);
       if (msg.type === "checkPart") checkPart();
+      if (msg.type === "checkAll") checkAll();                // popup: "Check all claims on this page"
       if (msg.type === "checkSelection") checkSelection();    // right-click menu: only shown when text is selected
       reply({ ok: true });                        // lets the sender know a live content script handled it
     });
