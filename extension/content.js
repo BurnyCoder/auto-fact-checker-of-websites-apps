@@ -183,7 +183,7 @@
       if (rec) { rec.verdict = msg.verdict; rec.status = "done"; paint(rec); if (card.claimId === msg.claim_id) showCard(rec, card.x, card.y); }
     } else if (msg.type === "status") {
       const rec = msg.claim_id && claims.get(msg.claim_id);
-      if (rec) { rec.status = msg.status; paint(rec); }
+      if (rec) { rec.status = msg.status; rec.error = msg.status === "error" ? msg.message : null; paint(rec); }
       if (msg.status === "error" && msg.message) toast(msg.message);
     }
   }
@@ -229,7 +229,7 @@
       const bar = el("span", "bar"); const fill = el("i"); fill.style.width = pct(v.confidence);
       fill.style.background = LABEL_COLOR[v.label]; bar.append(fill); head.append(bar);
     } else {
-      head.append(el("span", "pill", rec.status === "checking" ? "Checking…" : "Not checked yet"));
+      head.append(el("span", "pill", { checking: "Checking…", error: "Couldn't check" }[rec.status] || "Not checked yet"));
       head.lastChild.style.background = "#80868b";
     }
     cardEl.append(head, el("div", "muted", rec.claim.text));
@@ -264,7 +264,8 @@
       }
       if (v.flags?.length) cardEl.append(el("div", "muted", `flags: ${v.flags.join(", ")}`));
     } else if (rec.status !== "checking") {
-      const b = el("button", null, "Check this claim");
+      if (rec.error) cardEl.append(el("div", "h", "Why"), el("div", null, rec.error));   // e.g. the daily budget is used up
+      const b = el("button", null, rec.error ? "Try again" : "Check this claim");
       b.addEventListener("click", () => { post({ type: "check", claimId: rec.claim.id }); rec.status = "checking"; paint(rec); showCard(rec, x, y); });
       cardEl.append(b);
     }
