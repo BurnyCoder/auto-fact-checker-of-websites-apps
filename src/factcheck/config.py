@@ -40,11 +40,11 @@ class Settings(BaseSettings):
     extract_timeout_s: float = 90.0
 
     # --- budget (API-equivalent USD) ---
-    total_budget_usd: float = 10.0
+    total_budget_usd: float = 20.0                     # raised from 10 by the user on 2026-11-13 (eval ran under 10)
     daily_app_budget_usd: float = 1.0
 
     # --- app behaviour ---
-    factcheck_mode: Literal["continuous", "hotkey", "both"] = "both"
+    factcheck_mode: Literal["continuous", "hotkey", "both"] = "hotkey"   # check only when asked (user decision)
     factcheck_display: Literal["overlay", "panel", "both"] = "both"
     capture_interval_s: float = 2.0
     hotkey: str = "ctrl+alt+f"

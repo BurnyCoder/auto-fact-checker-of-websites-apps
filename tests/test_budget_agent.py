@@ -183,3 +183,13 @@ def test_ledger_survives_concurrent_processes(tmp_path):
     assert all(p.wait(timeout=120) == 0 for p in procs)
     led = BudgetLedger(path, 100.0)
     assert len(led._rows()) == 200 and led.spent_total() == pytest.approx(0.2)
+
+
+def test_defaults_check_only_on_request_with_a_20_usd_cap(monkeypatch):
+    """User decision (2026-11-13): fact-check only when the button / shortcut is pressed; project cap $20."""
+    from factcheck.config import Settings
+
+    for var in ("FACTCHECK_MODE", "TOTAL_BUDGET_USD"):
+        monkeypatch.delenv(var, raising=False)
+    s = Settings(_env_file=None)
+    assert s.factcheck_mode == "hotkey" and s.total_budget_usd == 20.0
