@@ -66,6 +66,10 @@ def extension_page(tmp_path, server_url: str, token: str, page_url: str, auto: b
         try:
             worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
             assert worker.url.startswith("chrome-extension://")
+            # wait for the one-time settings migration in onInstalled, or it could overwrite what we set
+            worker.evaluate("""async () => { for (let i = 0; i < 100; i++) {
+                if ((await chrome.storage.local.get('settingsVersion')).settingsVersion === 2) return;
+                await new Promise((r) => setTimeout(r, 50)); } throw new Error('settings migration did not run'); }""")
             settings = {"token": token, "debugExposeCard": True, "serverUrl": server_url}
             if auto is not None:
                 settings["autoMode"] = auto
