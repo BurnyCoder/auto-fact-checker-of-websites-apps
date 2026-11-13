@@ -61,7 +61,9 @@ on a $10 API-equivalent budget, which limited the web-search comparisons to 120 
 In plainer words: see [`reports/summary.md`](reports/summary.md). Full reports: [retrieval vs memory](reports/exp-02-h1-h2-retrieval.md) ·
 [OCR channel](reports/exp-03-h3-ocr.md) · [check-worthiness](reports/exp-04-h4-checkworthiness.md) ·
 [variance](reports/exp-05-e2-variance.md) · [corrections](reports/exp-06-e3-corrections.md) · [paper](reports/paper/paper.pdf) ·
-[interactive explorer](https://burnycoder.github.io/auto-fact-checker-of-websites-apps/).
+[interactive explorer](https://burnycoder.github.io/auto-fact-checker-of-websites-apps/) ·
+per-claim results on Hugging Face: [dataset](https://huggingface.co/datasets/BurnyCoder/fact-check-what-you-see-results)
+in the [collection](https://huggingface.co/collections/BurnyCoder/fact-checking-what-you-see-6af6bc948adcba118612a856).
 
 ![Accuracy by condition](reports/figures/confirmatory_accuracy.png)
 
@@ -142,9 +144,16 @@ copy .env.example .env
   Optionally put `ANTHROPIC_API_KEY` in `.env` as a fallback. The subscription mode is meant for personal,
   single-user use; the SDK docs ask distributed products to use API keys
   ([legal](https://code.claude.com/docs/en/legal-and-compliance.md)).
-* **Chrome extension**: open `chrome://extensions`, enable *Developer mode*, *Load unpacked* → select the
-  `extension/` folder. Start the app, choose *Copy extension token* in the tray menu, paste it into the
-  extension's *Options* page.
+* **Chrome extension** (needs the app running for the token):
+  1. `uv run factcheck` — a blue check-mark icon appears in the Windows tray (maybe behind the `^` arrow).
+  2. Right-click it → *Copy extension token*.
+  3. In Chrome open `chrome://extensions`, switch on *Developer mode* (top right), click *Load unpacked* (top left)
+     and select this repo's `extension/` folder. The card "Fact Check What You See" must show the ID
+     `dkfijekfdkhfpkbidoifbdibdihhcgcp` (the local server only accepts that ID).
+  4. On the card click *Details* → *Extension options*, paste the token (Ctrl+V) into *Extension token*, click *Save*;
+     the status line should read "Connected to the local app ✓".
+* **Budget:** `TOTAL_BUDGET_USD` (default 10) is one cap for everything recorded in `budget_ledger.jsonl`, including
+  the development and benchmark spend of this repo; raise it in `.env` before regular use.
 
 ## Use
 
@@ -175,7 +184,7 @@ Tray menu: pause, check screen now, switch trigger/display modes, copy extension
 ## Tests
 
 ```bash
-uv run pytest            # 85 tests, $0: fake SDK/FakeRunner, real sandbox, real OCR, Playwright extension e2e
+uv run pytest            # all $0: fake SDK/FakeRunner, real sandbox escape tests, real OCR, Playwright extension e2e
 ```
 
 ## Project layout
