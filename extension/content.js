@@ -133,9 +133,10 @@
     }
     const all = collectBlocks(onlyVisible, within, keep);
     const fresh = all.filter((b) => force || sentTexts.get(b.id) !== b.text).slice(0, MAX_BLOCKS);
-    if (!fresh.length) { if (force) toast(keep ? "No text to check in that part" : "No text to check on this page"); return; }
+    if (!fresh.length) { if (force) toast(keep ? "No text to check in that part" : "No text to check on this page"); return 0; }
     for (const b of fresh) sentTexts.set(b.id, b.text);
     post({ type: "submit", title: document.title, url: location.href, blocks: fresh, auto: autoMode || force, force });
+    return fresh.length;
   }
 
   function hasPasswordField() {
@@ -383,7 +384,20 @@
   // instead of every block under the selection's common ancestor, which for a multi-paragraph selection was the
   // whole article (e2e test, 2026-11-13).
   function checkRange(range) {
-    submit(true, false, document.body, (_el, nodes) => nodes.some((n) => range.intersectsNode(n)));
+    return submit(true, false, document.body, (_el, nodes) => nodes.some((n) => range.intersectsNode(n)));
+  }
+
+  const paragraphs = (n) => `${n} paragraph${n === 1 ? "" : "s"}`;
+
+  // The selection is used up once checked: it stayed selected (sometimes only in inactive grey), so the next
+  // Alt+Shift+S silently re-checked it instead of opening the box picker (user report + log, 2026-11-13).
+  function checkSelection() {
+    const sel = getSelection();
+    if (!sel || !sel.rangeCount || sel.isCollapsed) return false;
+    const n = checkRange(sel.getRangeAt(0));
+    sel.removeAllRanges();
+    if (n) toast(`checking ${paragraphs(n)} from your selection`);
+    return true;
   }
 
   // True when any line box of a text node overlaps the box (client coordinates;
@@ -434,15 +448,15 @@
     const b = boxOf(pickFrom, { x: e.clientX, y: e.clientY });
     stopPicker();
     if (b.right - b.left < PICK_MIN_PX || b.bottom - b.top < PICK_MIN_PX) return;
-    submit(true, false, document.body, (_el, nodes) => nodes.some((n) => textTouches(n, b)));
+    const n = submit(true, false, document.body, (_el, nodes) => nodes.some((n) => textTouches(n, b)));
+    if (n) toast(`checking ${paragraphs(n)} in the box`);
   });
   pickEl.addEventListener("contextmenu", (e) => { e.preventDefault(); stopPicker(); });   // right-click cancels
 
   function checkPart() {
     if (siteBlocked) return toast("this site is on your never-check list (extension Options)");
-    const sel = getSelection();
-    if (sel && sel.rangeCount && !sel.isCollapsed) checkRange(sel.getRangeAt(0));
-    else startPicker();
+    if (pickEl.style.display === "block") return stopPicker();   // pressing the key again closes the picker
+    if (!checkSelection()) startPicker();
   }
 
   // ---------------------------------------------------------------------------- triggers
@@ -471,10 +485,7 @@
     settingsReady.then(() => {
       if (msg.type === "checkPage") submit(true);
       if (msg.type === "checkPart") checkPart();
-      if (msg.type === "checkSelection") {                    // right-click menu: only shown when text is selected
-        const sel = getSelection();
-        if (sel && sel.rangeCount && !sel.isCollapsed) checkRange(sel.getRangeAt(0));
-      }
+      if (msg.type === "checkSelection") checkSelection();    // right-click menu: only shown when text is selected
       reply({ ok: true });                        // lets the sender know a live content script handled it
     });
     return true;                                  // reply asynchronously
