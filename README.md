@@ -58,6 +58,10 @@ on a $10 API-equivalent budget, which limited the web-search comparisons to 120 
 | Control | Stratified random | CheckThat! 2024 T1 EN test | F1 | 0.256 |
 <!-- /GEN:eval_table -->
 
+The extractor rows measure the prompt that was evaluated (a capped claim list). After the evaluation the app switched
+to exhaustive per-sentence extraction with no cap (2026-11-13,
+[coverage measurement](reports/generated/extraction-coverage.md)); that version has not been run on these benchmarks.
+
 In plainer words: see [`reports/summary.md`](reports/summary.md). Full reports: [retrieval vs memory](reports/exp-02-h1-h2-retrieval.md) ·
 [OCR channel](reports/exp-03-h3-ocr.md) · [check-worthiness](reports/exp-04-h4-checkworthiness.md) ·
 [variance](reports/exp-05-e2-variance.md) · [corrections](reports/exp-06-e3-corrections.md) · [paper](reports/paper/paper.pdf) ·
@@ -128,9 +132,10 @@ What happens when you run it:
    extension (visible paragraphs of the page) or from OCR (all monitors). `Alt+Shift+S` / `Ctrl+Alt+R` send only the
    part you selected or dragged a box over. Optional automatic modes send it while you
    read (extension option; `FACTCHECK_MODE=continuous|both`: the foreground window, after two identical frames).
-3. New blocks go to the **extractor** (one Haiku call, no tools) which returns atomic claims with exact spans.
+3. New blocks go to the **extractor** (one Haiku call, no tools), which goes sentence by sentence (the output schema
+   requires an answer for every sentence) and returns every atomic claim with its exact span, most important first.
 4. Cached claims are answered immediately; the first 3 new ones are queued for **verification**, the rest wait
-   for a click. Each verification runs in its own CLI subprocess with an isolated config, a fresh `/work` folder,
+   for a click on *Check this claim*. Each verification runs in its own CLI subprocess with an isolated config, a fresh `/work` folder,
    hooks that cap searches, and a JSON schema for the verdict.
 5. The verdict is validated (e.g. a "Refuted" verdict must include a correction with its own source); one cheap
    tool-less repair pass fixes rule violations; sources are checked against the tool trace and re-fetched to
@@ -166,8 +171,8 @@ copy .env.example .env
   4. On the card click *Details* → *Extension options*, paste the token (Ctrl+V) into *Extension token*, click *Save*;
      the status line should read "Connected to the local app ✓".
   5. Open an article and press `Alt+Shift+F` (or click the extension's toolbar button → *Check this page now*).
-     Claims get a dotted underline; up to 3 of them (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red / amber / grey as
-     verdicts arrive, the rest wait for *Check this claim* in the hover card. Nothing is sent before you ask, unless
+     Every claim found gets a dotted underline; the 3 most important (`MAX_AUTO_CHECKS_PER_BATCH`) turn green / red /
+     amber / grey as verdicts arrive, the rest wait for *Check this claim* in the hover card. Nothing is sent before you ask, unless
      you tick *Check pages automatically* in Options. If the app is not running, a message says so.
   6. After updating `extension/` (e.g. `git pull`), click the reload arrow on the extension's card in
      `chrome://extensions`; reload open tabs, or just press the shortcut there (the extension re-attaches itself).

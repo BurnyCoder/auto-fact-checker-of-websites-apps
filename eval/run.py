@@ -104,7 +104,7 @@ async def h3_task(runner, item: AveritecClaim, condition: str, purpose: str, cel
         errs = text_errors(item.claim, blocks)
     source = SourceInfo(kind="eval", source_id=f"{item.item_id}-{condition}", app="chat" if layout == "chat" else "browser",
                         title="#general" if layout == "chat" else "Morning briefing")
-    claims = await extract_claims(blocks, source, runner, purpose=f"{purpose}-extract")
+    claims = await extract_claims(blocks, source, runner, purpose=f"{purpose}-extract", max_claims=12)   # as preregistered
     base = {"gold": item.label, "layout": layout, "font_px": font_px, **errs, "n_blocks": len(blocks),
             "extracted": [c.text for c in claims]}
     if not claims:                                       # preregistered: failed extraction counts as wrong

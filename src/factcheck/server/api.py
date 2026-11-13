@@ -28,8 +28,6 @@ from factcheck.models import SourceInfo, TextBlock
 from factcheck.pipeline.service import FactCheckService
 
 log = logging.getLogger(__name__)
-MAX_BLOCKS_PER_SUBMIT = 60
-MAX_BLOCK_CHARS = 4000
 
 
 def extension_id_from_manifest(manifest_path: Path = PROJECT_ROOT / "extension" / "manifest.json") -> str:
@@ -140,8 +138,10 @@ def create_app(settings: Settings, service: FactCheckService, allowed_origins: s
             if not source.source_id:
                 return
             hub.owner[source.source_id] = conn
-            blocks = [TextBlock(id=str(b.get("id", ""))[:40], text=str(b.get("text", ""))[:MAX_BLOCK_CHARS])
-                      for b in (msg.get("blocks") or [])[:MAX_BLOCKS_PER_SUBMIT]]
+            # no cap on text length or block count (user decision, 2026-11-13): checks are on request, the extension
+            # sends only visible or picked text, and the budget ledger bounds what extraction can spend
+            blocks = [TextBlock(id=str(b.get("id", ""))[:40], text=str(b.get("text", "")))
+                      for b in (msg.get("blocks") or [])]
             asyncio.create_task(service.submit(source, blocks, auto=bool(msg.get("auto", True)),
                                                force=bool(msg.get("force", False))))
         elif kind == "check":
