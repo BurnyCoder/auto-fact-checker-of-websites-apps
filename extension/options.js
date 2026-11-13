@@ -2,7 +2,7 @@
 const DEFAULT_BLOCKED_SITES = ["mail.google.com", "outlook.live.com", "outlook.office.com", "mail.yahoo.com", "mail.proton.me",
   "web.whatsapp.com", "web.telegram.org", "messages.google.com", "vault.bitwarden.com", "my.1password.com", "keepersecurity.com",
   "accounts.google.com", "login.microsoftonline.com", "login.live.com"];   // keep in sync with content.js
-const DEFAULTS = { serverUrl: "ws://127.0.0.1:8765/ws", token: "", autoMode: true, blockedSites: DEFAULT_BLOCKED_SITES };
+const DEFAULTS = { serverUrl: "ws://127.0.0.1:8765/ws", token: "", autoMode: false, blockedSites: DEFAULT_BLOCKED_SITES };
 const $ = (id) => document.getElementById(id);
 
 async function load() {

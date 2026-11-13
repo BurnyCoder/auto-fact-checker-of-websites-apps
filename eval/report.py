@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from eval import metrics as m
+from factcheck.config import Settings
 from factcheck.models import LABELS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -485,7 +486,8 @@ def blocks_budget() -> dict[str, str]:
         auth[r["auth"]] += r["cost_usd"]
     lines = ["| Phase | API-equivalent USD |", "|---|---|"] + [f"| {k} | ${v:.2f} |" for k, v in sorted(groups.items())]
     api_part = f", via API key for ${auth['api_key']:.2f}" if auth.get("api_key") else ""
-    lines += [f"| **total** | **${total:.2f}** of $10.00 |", "",
+    cap = Settings.model_fields["total_budget_usd"].default        # the code default, not a local .env override
+    lines += [f"| **total** | **${total:.2f}** of ${cap:.2f} (the evaluation ran under the earlier $10.00 cap) |", "",
               f"{len(rows)} model calls; billed via subscription for ${auth.get('subscription', 0):.2f}{api_part}."]
     return {"budget": "\n".join(lines) + "\n"}
 

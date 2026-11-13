@@ -14,8 +14,8 @@ statement when the claim is false.
 We then measured, on public benchmarks of real fact-checked claims, (1) whether the web tools make the agent more
 accurate than answering from memory, (2) how much of that comes from simply finding an existing fact-check article,
 (3) whether reading text from the screen through OCR loses accuracy compared with having the exact text, and (4)
-whether the claim-picking step finds the sentences professional fact-checkers consider worth checking. The whole project
-was limited to $10 of model usage, which caps the number of claims we could test and therefore how small an effect we
+whether the claim-picking step finds the sentences professional fact-checkers consider worth checking. All experiments
+ran under a $10 cap on model usage (raised to $20 afterwards for using the app), which caps the number of claims we could test and therefore how small an effect we
 can detect.
 
 ## All experiments
@@ -126,11 +126,11 @@ Permutation test vs the best baseline (heuristic, F1 0.424): p < 0.001, Holm-adj
 <!-- GEN:budget -->
 | Phase | API-equivalent USD |
 |---|---|
-| app & demos | $0.81 |
+| app & demos | $0.98 |
 | development & tests | $0.22 |
 | evaluation | $6.15 |
 | pilot | $1.11 |
-| **total** | **$8.29** of $10.00 |
+| **total** | **$8.46** of $20.00 (the evaluation ran under the earlier $10.00 cap) |
 
-2931 model calls; billed via subscription for $8.29.
+2981 model calls; billed via subscription for $8.46.
 <!-- /GEN:budget -->

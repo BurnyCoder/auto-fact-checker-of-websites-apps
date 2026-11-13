@@ -68,8 +68,9 @@ class Backend:
 
     async def _main(self) -> None:
         self.service.start()
-        for factory in self._startup_tasks:
-            asyncio.create_task(factory())
+        # keep references (the loop holds tasks weakly: https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task)
+        # and cancel them on shutdown, or the capture loop is "destroyed but pending" when the app quits
+        startup = [asyncio.create_task(factory()) for factory in self._startup_tasks]
         serve = asyncio.create_task(self.server.serve())
         while not self.server.started and not serve.done():
             await asyncio.sleep(0.05)
@@ -80,6 +81,9 @@ class Backend:
         try:
             await serve
         finally:
+            for task in startup:
+                task.cancel()
+            await asyncio.gather(*startup, return_exceptions=True)
             await self.service.stop()
 
     def call(self, coro: Coroutine) -> concurrent.futures.Future:

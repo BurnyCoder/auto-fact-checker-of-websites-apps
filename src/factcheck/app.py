@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import sys
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
@@ -101,6 +103,14 @@ def main() -> None:
     backend, capture = build_backend(settings)
     ui = build_ui(settings, backend, capture, qt)
     backend.start()
+    # Ctrl+C in the terminal: Python only runs signal handlers between bytecodes, which never happens while Qt's
+    # C++ loop waits, so it surfaced as a KeyboardInterrupt traceback inside a Qt slot (live test, 2026-11-13).
+    # A handler that quits Qt plus a 250 ms no-op timer that gives Python those moments fixes it
+    # (https://docs.python.org/3/library/signal.html#execution-of-python-signal-handlers).
+    signal.signal(signal.SIGINT, lambda *_: qt.quit())
+    wake = QTimer()
+    wake.timeout.connect(lambda: None)
+    wake.start(250)
     code = qt.exec()
     ui["hotkey"].close()
     backend.stop()
