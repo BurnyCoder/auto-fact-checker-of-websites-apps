@@ -5,6 +5,8 @@ plus `layout` / `frame_changed` events so the overlay can place and hide its box
 Global context: runs as a task on the backend event loop (backend.py). Privacy rules live here: paused
 state, blocked apps (password managers, banking, ...), our own windows, incognito/private windows, and
 Chrome windows while the extension is connected (the extension handles those with exact page text).
+Continuous mode skips such a foreground window; the hotkey path, which reads whole monitors, blacks out the parts
+of the screen where such a window is on top before OCR (`skip_mask`).
 """
 
 from __future__ import annotations
@@ -34,6 +36,22 @@ def frames_equal(a: np.ndarray | None, b: np.ndarray | None, tol: float = 1.5) -
     return float(np.mean(np.abs(a.astype(np.int16) - b.astype(np.int16)))) < tol
 
 
+def skip_mask(windows: list[winapi.WindowInfo], rect: winapi.Rect,
+              skip: Callable[[winapi.WindowInfo], bool]) -> np.ndarray:
+    """Boolean (height, width) mask of one monitor's pixels to leave out. `windows` is topmost first; painting them
+    bottom-up means each pixel ends up owned by the topmost window covering it. A see-through window (may be
+    transparent) never counts as covering, but is itself left out if `skip` says so."""
+    mask = np.zeros((rect.height, rect.width), dtype=bool)
+    for w in reversed(windows):
+        x0, y0 = max(w.rect.left - rect.left, 0), max(w.rect.top - rect.top, 0)
+        x1 = min(w.rect.left + w.rect.width - rect.left, rect.width)
+        y1 = min(w.rect.top + w.rect.height - rect.top, rect.height)
+        leave_out = skip(w)
+        if x0 < x1 and y0 < y1 and (leave_out or not w.see_through):
+            mask[y0:y1, x0:x1] = leave_out
+    return mask
+
+
 def thumbnail(pixels: np.ndarray, step: int = 8) -> np.ndarray:
     return pixels[::step, ::step, 1]                       # green channel ~ luminance, every 8th pixel
 
@@ -50,10 +68,15 @@ class DesktopCapture:
 
     # ---------------------------------------------------------------- policy
     def skip_reason(self, win: winapi.WindowInfo) -> str | None:
-        if win.is_own:
-            return "own window"
+        """Why continuous mode ignores this foreground window (None = capture it)."""
         if win.minimized or win.rect.width < 80 or win.rect.height < 60:
             return "minimized/tiny"
+        return self.privacy_reason(win)
+
+    def privacy_reason(self, win: winapi.WindowInfo) -> str | None:
+        """Why this window's text must never be read (both modes)."""
+        if win.is_own:
+            return "own window"
         if win.process in self.settings.blocked_app_list:
             return f"blocked app {win.process}"
         if any(p in win.title.lower() for p in PRIVATE_TITLES):
@@ -63,10 +86,16 @@ class DesktopCapture:
         return None
 
     # ---------------------------------------------------------------- OCR helpers
-    async def _ocr_region(self, rect: winapi.Rect, prefix: str):
+    async def _ocr_monitor(self, mon: winapi.Monitor, windows: list[winapi.WindowInfo], left_out: set[int]):
+        """Screenshot one monitor, black out where a left-out window is on top, OCR, group into blocks."""
+        rect = mon.rect
         pixels = await asyncio.to_thread(grab, rect.left, rect.top, rect.width, rect.height)
+        mask = skip_mask(windows, rect, lambda w: w.hwnd in left_out)
+        if mask.any():
+            pixels = pixels.copy()                           # mss buffers are read-only
+            pixels[mask] = (0, 0, 0, 255)                    # opaque black: no text for the OCR to find
         lines = await ocr_bgra(pixels, rect.left, rect.top)
-        return pixels, group_lines(lines, prefix=prefix)
+        return group_lines(lines, prefix=f"s{mon.device[-1]}-")
 
     def _publish_layout(self, source_id: str, blocks) -> None:
         self.layouts[source_id] = blocks
@@ -78,10 +107,12 @@ class DesktopCapture:
         if self.paused:
             return 0
         total = 0
+        windows = await asyncio.to_thread(winapi.visible_windows)
+        reasons = {w.hwnd: r for w in windows if (r := self.privacy_reason(w))}
         for mon in winapi.monitors():
             source_id = f"screen:{mon.device}"
             try:
-                _, blocks = await self._ocr_region(mon.rect, prefix=f"s{mon.device[-1]}-")
+                blocks = await self._ocr_monitor(mon, windows, set(reasons))
             except Exception:
                 log.exception("OCR failed on %s", mon.device)
                 continue
@@ -89,7 +120,8 @@ class DesktopCapture:
             source = SourceInfo(kind="desktop", source_id=source_id, app="screen", title=mon.device)
             asyncio.create_task(self.service.submit(source, blocks, auto=True, force=True))
             total += len(blocks)
-        log.info("hotkey capture: %d text blocks on %d monitor(s)", total, len(winapi.monitors()))
+        left_out = ", ".join(f"{w.process} ({reasons[w.hwnd]})" for w in windows if w.hwnd in reasons) or "nothing"
+        log.info("hotkey capture: %d text blocks on %d monitor(s); left out: %s", total, len(winapi.monitors()), left_out)
         return total
 
     # ---------------------------------------------------------------- continuous path

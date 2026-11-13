@@ -10,7 +10,11 @@ DWMWA_EXTENDED_FRAME_BOUNDS (the visible frame, without the invisible resize bor
 includes: https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute),
 EnumDisplayMonitors / GetMonitorInfoW, SetWindowDisplayAffinity with WDA_EXCLUDEFROMCAPTURE (Windows 10
 2004+: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity),
-RegisterHotKey (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey).
+RegisterHotKey (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey),
+GetTopWindow + GetWindow(GW_HWNDNEXT) to walk top-level windows in z-order
+(https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindow), DWMWA_CLOAKED (windows on other
+virtual desktops or suspended UWP apps report IsWindowVisible but are not drawn) and WS_EX_TRANSPARENT (click-through
+overlays such as ours: Qt::WindowTransparentForInput sets it).
 """
 
 from __future__ import annotations
@@ -24,7 +28,11 @@ import psutil
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 dwmapi = ctypes.WinDLL("dwmapi")
-DWMWA_EXTENDED_FRAME_BOUNDS = 9
+DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_CLOAKED = 9, 14
+GWL_EXSTYLE, GW_HWNDNEXT = -20, 2
+WS_EX_TRANSPARENT, WS_EX_LAYERED, WS_EX_NOACTIVATE = 0x20, 0x80000, 0x8000000
+user32.GetTopWindow.restype = user32.GetWindow.restype = wintypes.HWND
+user32.GetWindow.argtypes = [wintypes.HWND, wintypes.UINT]
 WDA_NONE, WDA_EXCLUDEFROMCAPTURE = 0x0, 0x11
 MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 0x1, 0x2, 0x4, 0x8, 0x4000
 WM_HOTKEY = 0x0312
@@ -46,6 +54,7 @@ class WindowInfo:
     process: str          # lowercase executable name, e.g. "discord.exe"
     rect: Rect
     minimized: bool
+    see_through: bool = False   # layered and never activated (e.g. the GeForce overlay): may be transparent
 
     @property
     def is_own(self) -> bool:
@@ -61,23 +70,52 @@ class Monitor:
 
 def foreground_window() -> WindowInfo | None:
     hwnd = user32.GetForegroundWindow()
-    if not hwnd:
-        return None
+    return window_info(hwnd) if hwnd else None
+
+
+def window_info(hwnd: int, names: dict[int, str] | None = None, see_through: bool = False) -> WindowInfo:
+    """Title, process and visible frame of one top-level window (`names` caches pid -> process name)."""
     length = user32.GetWindowTextLengthW(hwnd)
     buf = ctypes.create_unicode_buffer(length + 1)
     user32.GetWindowTextW(hwnd, buf, length + 1)
     pid = wintypes.DWORD()
     user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    try:
-        process = psutil.Process(pid.value).name().lower()
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        process = ""
+    names = {} if names is None else names
+    if pid.value not in names:
+        try:
+            names[pid.value] = psutil.Process(pid.value).name().lower()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            names[pid.value] = ""
+    process = names[pid.value]
     rect = wintypes.RECT()
     if dwmapi.DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, ctypes.byref(rect), ctypes.sizeof(rect)) != 0:
         user32.GetWindowRect(hwnd, ctypes.byref(rect))            # fallback
     return WindowInfo(hwnd=int(hwnd), title=buf.value, pid=pid.value, process=process,
                       rect=Rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top),
-                      minimized=bool(user32.IsIconic(hwnd)))
+                      minimized=bool(user32.IsIconic(hwnd)), see_through=see_through)
+
+
+def visible_windows() -> list[WindowInfo]:
+    """Top-level windows that are drawn on screen, topmost first (z-order). Skips hidden, minimized, cloaked and
+    click-through windows (overlays, ours included: they cover the screen but show almost nothing). Layered windows
+    that never take focus are kept but marked `see_through`: they may be transparent, so they must not count as
+    covering what is below them (measured 2026-11-13: the GeForce overlay is layered + no-activate; Electron apps
+    such as Claude and Discord's are layered but activate)."""
+    found, names = [], {}
+    hwnd = user32.GetTopWindow(None)
+    for _ in range(10000):                         # bounded: the z-order can change while we walk it (GetWindow docs)
+        if not hwnd:
+            break
+        cloaked = wintypes.DWORD()
+        dwmapi.DwmGetWindowAttribute(wintypes.HWND(hwnd), DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+        ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+        if user32.IsWindowVisible(hwnd) and not user32.IsIconic(hwnd) and not cloaked.value and not ex & WS_EX_TRANSPARENT:
+            overlay_like = (ex & (WS_EX_LAYERED | WS_EX_NOACTIVATE)) == (WS_EX_LAYERED | WS_EX_NOACTIVATE)
+            info = window_info(hwnd, names, see_through=overlay_like)
+            if info.rect.width > 0 and info.rect.height > 0:
+                found.append(info)
+        hwnd = user32.GetWindow(hwnd, GW_HWNDNEXT)
+    return found
 
 
 class _MONITORINFOEXW(ctypes.Structure):
