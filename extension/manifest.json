@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Underlines factual claims on web pages with verdicts, confidence, corrections and sources from the local fact-check app.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0oVwG6+/VpqKOeMpnNfBUFj5JrKLiOJIYp+nqQ2V10/jtG8LiLNdGNQO7UhBU1jXG+U5ILx3SATgHxQ8zy7tcOosz9krBhSjWl6/t7Mv80mhCf+abaBL2HD//YtD3ka2VCgfqRcJYguw9V/Tz4kCFyzYUz0vXnITiCAzuBOtEC/pfB/+NthnO8uvsWD5GwOLNeJivjyTszDVuiURR9bSA5LSi01txqenJB7zkFqn6/by+lSZpgigM0b4LBx6IgZ97sFwvdP+dWhVm66HCt37OMg4+17+Q5kAES8BNVB31TsddcgiGHHEe6ZEgmY5MaV/2/hLFz3e0BaSzJh+XhbTsQIDAQAB",
-  "permissions": ["storage", "contextMenus"],
+  "permissions": ["storage", "contextMenus", "scripting", "activeTab"],
   "host_permissions": ["http://127.0.0.1/*"],
   "background": { "service_worker": "service_worker.js" },
   "content_scripts": [

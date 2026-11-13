@@ -8,8 +8,15 @@
 // with textContent (never innerHTML), and only http(s) links are rendered, so a malicious page or verdict
 // cannot inject markup into the card.
 (() => {
-  if (window.__factcheckLoaded) return;          // guard against double injection
-  window.__factcheckLoaded = true;
+  // Guard against double injection (manifest + chrome.scripting fallback). A copy left behind by a reloaded or
+  // removed extension is "orphaned": its chrome.runtime.id is gone and any extension API call throws
+  // "Extension context invalidated", so it is replaced instead of kept.
+  if (window.__factcheck?.alive()) return;
+  window.__factcheck?.teardown();
+  for (const old of document.querySelectorAll("#fc-card-host")) old.remove();
+  let dead = false;
+  const alive = () => { try { return !dead && !!chrome.runtime?.id; } catch { return false; } };
+  window.__factcheck = { alive, teardown: () => teardown() };
 
   const DOC_ID = Math.random().toString(36).slice(2, 10);   // new source id per page load
   const LABEL_HL = {
@@ -34,15 +41,35 @@
   const sentTexts = new Map();   // blockId -> last text submitted (to send only new/changed blocks)
   const claims = new Map();      // claimId -> {claim, verdict, status, ranges: Range[]}
   let port = null;
-  let autoMode = true;
+  let autoMode = false;          // default: check only when asked (toolbar button, Alt+Shift+F, right-click menu)
 
   // ---------------------------------------------------------------------------- port to service worker
+  // Opened lazily on the first request and reopened on the next one; no reconnect timer, so an orphaned copy
+  // never loops on "Extension context invalidated" (found in the live Chrome test, 2026-11-13).
   function connectPort() {
-    port = chrome.runtime.connect({ name: "factcheck" });
+    if (!alive()) return teardown();
+    try {
+      port = chrome.runtime.connect({ name: "factcheck" });
+    } catch { return teardown(); }
     port.onMessage.addListener(onMessage);
-    port.onDisconnect.addListener(() => { port = null; setTimeout(connectPort, 2000); });
+    // chrome.runtime.id is still set while the unloading extension disconnects us, so look again a moment later
+    port.onDisconnect.addListener(() => { port = null; setTimeout(() => { if (!alive()) teardown(); }, 1000); });
   }
-  function post(msg) { if (!port) connectPort(); port.postMessage({ docId: DOC_ID, ...msg }); }
+  function post(msg) {
+    if (!port) connectPort();
+    try { port?.postMessage({ docId: DOC_ID, ...msg }); } catch { port = null; if (!alive()) teardown(); }
+  }
+
+  // Remove our UI and listeners for good (the extension was reloaded or removed).
+  function teardown() {
+    if (dead) return;
+    dead = true;
+    for (const [name, hl] of Object.entries(HL)) if (CSS.highlights.get(name) === hl) CSS.highlights.delete(name);
+    host.remove();
+    observer.disconnect();
+    window.removeEventListener("scroll", onScroll);
+    document.removeEventListener("mousemove", onMove);
+  }
 
   // ---------------------------------------------------------------------------- block collection
   // A block = the nearest non-inline ancestor of some text nodes; its text is ONLY those text nodes
@@ -185,6 +212,11 @@
       const rec = msg.claim_id && claims.get(msg.claim_id);
       if (rec) { rec.status = msg.status; rec.error = msg.status === "error" ? msg.message : null; paint(rec); }
       if (msg.status === "error" && msg.message) toast(msg.message);
+    } else if (msg.type === "disconnected") {         // from the service worker: app not running / connection lost
+      for (const rec of claims.values()) {
+        if (rec.status === "checking") { rec.status = "error"; rec.error = msg.message; paint(rec); }
+      }
+      toast(msg.message);
     }
   }
 
@@ -301,7 +333,8 @@
   }
 
   let moveQueued = false;
-  document.addEventListener("mousemove", (e) => {
+  function onMove(e) {
+    if (!alive()) return teardown();               // orphaned copy (extension reloaded/removed): clean up on first use
     if (moveQueued) return;
     moveQueued = true;
     requestAnimationFrame(() => {
@@ -310,11 +343,13 @@
       if (rec) { clearTimeout(card.hideTimer); if (card.claimId !== rec.claim.id) showCard(rec, e.clientX, e.clientY); }
       else if (card.claimId) hideCardSoon();
     });
-  }, { passive: true });
+  }
+  document.addEventListener("mousemove", onMove, { passive: true });
 
   function toast(text) {
     toastEl.textContent = `Fact check: ${text}`;
     toastEl.style.display = "block";
+    if (debugExpose) host.dataset.debugToast = toastEl.textContent;   // test-only mirror (closed shadow root)
     setTimeout(() => { toastEl.style.display = "none"; }, 6000);
   }
 
@@ -323,29 +358,36 @@
   const onScroll = debounce(() => { if (autoMode) submit(false); }, 1200);
   const onMutate = debounce(() => { reanchor(); if (autoMode) submit(false); }, 1500);
   window.addEventListener("scroll", onScroll, { passive: true });
-  new MutationObserver((records) => {
+  const observer = new MutationObserver((records) => {
     if (records.every((r) => host.contains(r.target))) return;   // ignore our own card updates
     onMutate();
-  }).observe(document.body, { childList: true, subtree: true, characterData: true });
-
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "checkPage") submit(true);
-    if (msg.type === "checkSelection") {
-      const sel = getSelection();
-      if (sel && sel.rangeCount) {
-        const anc = sel.getRangeAt(0).commonAncestorContainer;
-        submit(true, false, anc.nodeType === 1 ? anc : anc.parentElement);
-      }
-    }
   });
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-  chrome.storage.local.get({ autoMode: true, blockedSites: DEFAULT_BLOCKED_SITES, debugExposeCard: false }).then((s) => {
-    autoMode = s.autoMode;
-    debugExpose = !!s.debugExposeCard;
-    siteBlocked = s.blockedSites.some((site) => matchesSite(location.hostname.toLowerCase(), site));
-    if (siteBlocked) return;                      // never connect or send anything from blocked sites
-    connectPort();
-    if (autoMode) setTimeout(() => submit(false), 1200);
+  // Settings first: a check must never run before the never-check site list is known.
+  const settingsReady = chrome.storage.local.get({ autoMode: false, blockedSites: DEFAULT_BLOCKED_SITES, debugExposeCard: false })
+    .then((s) => {
+      autoMode = s.autoMode;
+      debugExpose = !!s.debugExposeCard;
+      siteBlocked = s.blockedSites.some((site) => matchesSite(location.hostname.toLowerCase(), site));
+      if (siteBlocked || !autoMode) return;       // manual mode: nothing is sent until the user asks
+      connectPort();
+      setTimeout(() => submit(false), 1200);
+    });
+
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    settingsReady.then(() => {
+      if (msg.type === "checkPage") submit(true);
+      if (msg.type === "checkSelection") {
+        const sel = getSelection();
+        if (sel && sel.rangeCount) {
+          const anc = sel.getRangeAt(0).commonAncestorContainer;
+          submit(true, false, anc.nodeType === 1 ? anc : anc.parentElement);
+        }
+      }
+      reply({ ok: true });                        // lets the sender know a live content script handled it
+    });
+    return true;                                  // reply asynchronously
   });
   chrome.storage.onChanged.addListener((c) => { if (c.autoMode) autoMode = c.autoMode.newValue; });
 })();
