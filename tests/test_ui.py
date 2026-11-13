@@ -180,6 +180,60 @@ def test_screen_boxes_stay_for_the_ttl_after_the_last_verdict(qt, monkeypatch):
     assert state.overlay_items() == [] and changed == [1]
 
 
+def contrast(fg: str, bg: str) -> float:
+    """WCAG 2.x contrast ratio (https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio, relative luminance per
+    https://www.w3.org/TR/WCAG21/#dfn-relative-luminance)."""
+    def lum(hex_colour: str) -> float:
+        rgb = [int(hex_colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_card_themes_have_readable_contrast():
+    """Both themes meet WCAG AA (4.5:1) for every text colour on the backgrounds it is drawn on."""
+    from factcheck.ui.panel import DARK, LIGHT
+
+    for t in (LIGHT, DARK):
+        for fg in (t.text, t.muted, t.link):
+            assert contrast(fg, t.card) >= 4.5, (t, fg)
+        for fg in (t.text, t.muted):
+            assert contrast(fg, t.corr) >= 4.5, (t, fg)
+    assert contrast(DARK.card, "#000000") < 3 and contrast(LIGHT.card, "#ffffff") < 1.1   # dark card, light card
+
+
+def test_dark_scheme_gives_dark_cards(qt):
+    """User (2026-11-13): no white background in dark mode. The panel picks the theme from the system colour scheme
+    and re-themes existing cards when it changes."""
+    from PySide6.QtCore import Qt
+
+    from factcheck.ui.panel import DARK, LIGHT, Panel, theme_for
+
+    assert theme_for(Qt.ColorScheme.Dark) is DARK
+    assert theme_for(Qt.ColorScheme.Light) is LIGHT and theme_for(Qt.ColorScheme.Unknown) is LIGHT
+    state = UiState()
+    src = SourceInfo(kind="desktop", source_id="screen:x", app="screen", title="DISPLAY1")
+    state.on_event({"type": "claims", "source_id": "screen:x", "claims": [
+        Claim(id="c", text="Claim.", span="s", block_id="b", source=src, status="pending")]})
+    panel = Panel(state, on_check=lambda _c: None, status_text=lambda: "")
+    panel.set_theme(DARK)
+    card = panel.cards["c"]
+    assert DARK.muted in card.label.text() and LIGHT.muted not in card.label.text()
+    card.resize(440, 160)
+    card.show()
+    qt.processEvents()
+    image = card.grab().toImage()
+    dpr = image.devicePixelRatio()
+    assert image.pixelColor(int(card.width() * dpr) - 8, int(4 * dpr)).lightness() < 80     # dark background
+    r = card.button.geometry()
+    assert max(image.pixelColor(int(x * dpr), int(y * dpr)).lightness()
+               for x in range(r.left(), r.right(), 2) for y in range(r.top(), r.bottom(), 2)) > 150   # button shows
+    panel.set_theme(LIGHT)
+    assert LIGHT.muted in card.label.text()
+    panel.close()
+
+
 def test_card_puts_the_label_pill_on_its_own_line():
     src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
     claim = Claim(id="c", text="x", span="s", block_id="b", source=src)
