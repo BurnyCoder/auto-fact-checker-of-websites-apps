@@ -227,19 +227,26 @@
   // Closed shadow root: page scripts cannot read the card or click "Check this claim" to spend budget (code review).
   const shadow = host.attachShadow({ mode: "closed" });
   let debugExpose = false;                       // extension-only storage flag used by the Playwright test
+  // Colours follow the browser's light/dark preference (prefers-color-scheme), with the same light and dark sets as
+  // the desktop side panel (ui/panel.py: Material light, Windows 11 dark surfaces + Material dark text/link tones).
   shadow.innerHTML = `<style>
-    .card{position:fixed;max-width:420px;max-height:70vh;overflow:auto;background:#fff;color:#202124;border:1px solid #dadce0;
+    .card,.toast{--bg:#fff;--fg:#202124;--muted:#5f6368;--line:#dadce0;--link:#1a73e8;--quote:#3c4043;--corr:#fef7e0;
+      --code:#f1f3f4;--track:#eee;--btn:#1a73e8;--btn-fg:#fff;--toast:#202124;--toast-fg:#fff}
+    @media (prefers-color-scheme: dark){.card,.toast{--bg:#2b2b2b;--fg:#e8eaed;--muted:#9aa0a6;--line:#454545;
+      --link:#8ab4f8;--quote:#bdc1c6;--corr:#3a3222;--code:#202020;--track:#454545;--btn:#8ab4f8;--btn-fg:#202124;
+      --toast:#e8eaed;--toast-fg:#202124}}
+    .card{position:fixed;max-width:420px;max-height:70vh;overflow:auto;background:var(--bg);color:var(--fg);border:1px solid var(--line);
       border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;font:13px/1.45 system-ui,sans-serif;display:none}
     .row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     .pill{color:#fff;border-radius:999px;padding:2px 9px;font-weight:600;font-size:12px}
-    .bar{flex:1;height:6px;background:#eee;border-radius:3px;overflow:hidden}.bar>i{display:block;height:100%}
-    .muted{color:#5f6368;font-size:12px}.h{font-weight:600;margin-top:8px}
-    .src{margin:4px 0;padding-left:8px;border-left:3px solid #dadce0}.src a{color:#1a73e8;text-decoration:none}
-    .q{font-style:italic;color:#3c4043}.badge{font-size:11px;color:#5f6368;margin-left:4px}
-    .corr{background:#fef7e0;border-radius:6px;padding:6px 8px;margin-top:6px}
-    pre{white-space:pre-wrap;background:#f1f3f4;border-radius:6px;padding:6px;font-size:11px;margin:4px 0}
-    button{margin-top:8px;background:#1a73e8;color:#fff;border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
-    .toast{position:fixed;right:16px;bottom:16px;background:#202124;color:#fff;padding:8px 12px;border-radius:8px;font:13px system-ui;display:none}
+    .bar{flex:1;height:6px;background:var(--track);border-radius:3px;overflow:hidden}.bar>i{display:block;height:100%}
+    .muted{color:var(--muted);font-size:12px}.h{font-weight:600;margin-top:8px}
+    .src{margin:4px 0;padding-left:8px;border-left:3px solid var(--line)}.src a{color:var(--link);text-decoration:none}
+    .q{font-style:italic;color:var(--quote)}.badge{font-size:11px;color:var(--muted);margin-left:4px}
+    .corr{background:var(--corr);border-radius:6px;padding:6px 8px;margin-top:6px}
+    pre{white-space:pre-wrap;background:var(--code);border-radius:6px;padding:6px;font-size:11px;margin:4px 0}
+    button{margin-top:8px;background:var(--btn);color:var(--btn-fg);border:0;border-radius:6px;padding:6px 10px;cursor:pointer}
+    .toast{position:fixed;right:16px;bottom:16px;background:var(--toast);color:var(--toast-fg);padding:8px 12px;border-radius:8px;font:13px system-ui;display:none}
   </style><div class="card" part="card"></div><div class="toast"></div>`;
   document.documentElement.appendChild(host);
   const cardEl = shadow.querySelector(".card");
@@ -302,7 +309,11 @@
       cardEl.append(b);
     }
     cardEl.style.display = "block";
-    if (debugExpose) host.dataset.debugCard = cardEl.innerText;   // test-only mirror (closed shadow root)
+    if (debugExpose) {                                           // test-only mirror (closed shadow root)
+      const cs = getComputedStyle(cardEl);
+      host.dataset.debugCard = cardEl.innerText;
+      host.dataset.debugCardColors = `${cs.backgroundColor}|${cs.color}`;
+    }
     const w = cardEl.offsetWidth, h = cardEl.offsetHeight;
     cardEl.style.left = `${Math.max(8, Math.min(x + 12, innerWidth - w - 8))}px`;
     cardEl.style.top = `${y + 18 + h > innerHeight ? Math.max(8, y - h - 12) : y + 18}px`;

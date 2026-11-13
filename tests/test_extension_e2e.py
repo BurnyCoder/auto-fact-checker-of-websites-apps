@@ -118,6 +118,20 @@ def test_extension_highlights_and_hover_card(tmp_path, backend, page_server):
         assert "Why this confidence" in card and "62%" in card and "Eiffel Tower" in card
 
 
+def test_hover_card_follows_dark_mode(tmp_path, backend, page_server):
+    """User (2026-11-13): no white backgrounds in dark mode. The card follows prefers-color-scheme."""
+    colours = "() => document.querySelector('#fc-card-host').dataset.debugCardColors"
+    with backend_page(tmp_path, backend, page_server) as (_, page):
+        page.wait_for_function(f"({VERDICTS})() >= 3", timeout=20000)
+        hover_card(page)
+        assert page.evaluate(colours) == "rgb(255, 255, 255)|rgb(32, 33, 36)"          # light: white card, dark text
+        page.emulate_media(color_scheme="dark")
+        page.mouse.move(1, 1)
+        page.wait_for_function("() => !document.querySelector('#fc-card-host').dataset.debugCard", timeout=5000)
+        hover_card(page)
+        assert page.evaluate(colours) == "rgb(43, 43, 43)|rgb(232, 234, 237)"          # dark: #2b2b2b card, light text
+
+
 def test_failed_check_explains_why_in_the_card(tmp_path, backend, page_server, monkeypatch):
     """Regression (2026-11-13, live Chrome test): a refused check looked exactly like "Not checked yet"."""
     async def refuse(*args, **kwargs):

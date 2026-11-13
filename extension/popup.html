@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { font: 13px/1.5 system-ui, sans-serif; width: 260px; margin: 12px; color: #202124; }
+    /* color-scheme: Chrome then draws the page, text and buttons dark when the browser/OS is in dark mode */
+    :root { color-scheme: light dark; }
+    body { font: 13px/1.5 system-ui, sans-serif; width: 260px; margin: 12px; }
     button { width: 100%; padding: 7px; margin-top: 8px; }
     .legend span { display: inline-block; margin-right: 8px; }
     .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
