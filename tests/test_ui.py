@@ -116,6 +116,70 @@ def test_panel_card_is_readable_in_dark_mode(qt):
         qt.setPalette(old)
 
 
+def test_check_button_is_visible_in_dark_mode(qt):
+    """Regression (2026-11-13, user: "I don't see the button"): Windows 11 dark mode drew the Check button with white
+    text on the white card. Simulate it with a white-on-white palette; the button must still show dark pixels."""
+    from PySide6.QtGui import QColor, QPalette
+
+    from factcheck.ui.panel import ClaimCard
+
+    old = qt.palette()
+    white = QPalette(old)
+    for role in (QPalette.ColorRole.Button, QPalette.ColorRole.ButtonText, QPalette.ColorRole.Window):
+        white.setColor(role, QColor("white"))
+    qt.setPalette(white)
+    try:
+        card = ClaimCard(lambda _cid: None, auto_checks=3)
+        src = SourceInfo(kind="desktop", source_id="screen:x", app="screen", title="DISPLAY1")
+        card.update_from(Claim(id="c", text="x", span="s", block_id="b", source=src, status="pending"), None)
+        card.resize(440, 160)
+        card.show()
+        qt.processEvents()
+        assert card.button.isVisible() and card.button.text() == "Check this claim"
+        image, r = card.grab().toImage(), card.button.geometry()
+        dpr = image.devicePixelRatio()
+        darkest = min(image.pixelColor(int(x * dpr), int(y * dpr)).lightness()
+                      for x in range(r.left(), r.right(), 2) for y in range(r.top(), r.bottom(), 2))
+        assert darkest < 160                                  # text/border drawn in a colour that shows on white
+        card.close()
+    finally:
+        qt.setPalette(old)
+
+
+def test_pending_card_says_how_to_check_it():
+    src = SourceInfo(kind="desktop", source_id="screen:x", app="screen", title="DISPLAY1")
+    out = card_html(Claim(id="c", text="Claim.", span="s", block_id="b", source=src, status="pending"), None,
+                    auto_checks=3)
+    assert "first 3" in out and "Check this claim" in out
+    assert "</div><div" in out.split("Claim.")[0]             # claim text on its own line, not run into the source
+
+
+def test_screen_boxes_stay_for_the_ttl_after_the_last_verdict(qt, monkeypatch):
+    """Regression (2026-11-13 live check): hotkey boxes expired 60 s after the capture, while verdicts took 22-60 s,
+    so they vanished right after (or before) the results came in. The clock now restarts on every result."""
+    import factcheck.ui.state as state_mod
+
+    now = [1000.0]
+    monkeypatch.setattr(state_mod.time, "monotonic", lambda: now[0])
+    state = UiState()
+    text = "the Great Wall is visible from the Moon"
+    blocks = group_lines([OcrLine(text, Box(x=10, y=10, w=400, h=20, text=text))])
+    src = SourceInfo(kind="desktop", source_id="screen:D1", app="screen")
+    state.on_event({"type": "layout", "source_id": "screen:D1", "blocks": blocks})
+    state.on_event({"type": "claims", "source_id": "screen:D1", "claims": [
+        Claim(id="c1", text=text, span=text, block_id=blocks[0].id, source=src, status="checking")]})
+    now[0] += 55
+    state.on_event({"type": "verdict", "source_id": "screen:D1", "claim_id": "c1", "verdict": verdict()})
+    now[0] += state_mod.SCREEN_LAYOUT_TTL_S - 1
+    state.expire()
+    assert [i.label for i in state.overlay_items()] == ["Refuted"]   # still readable 59 s after the verdict
+    changed = []
+    state.changed.connect(lambda: changed.append(1))
+    now[0] += 2
+    state.expire()                                             # the 1 s timer: boxes go even with no new event
+    assert state.overlay_items() == [] and changed == [1]
+
+
 def test_card_puts_the_label_pill_on_its_own_line():
     src = SourceInfo(kind="chrome", source_id="t", app="chrome", title="Joe Cahill - Wikipedia")
     claim = Claim(id="c", text="x", span="s", block_id="b", source=src)

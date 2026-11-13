@@ -64,7 +64,8 @@ def build_ui(settings: Settings, backend: Backend, capture: DesktopCapture, qt: 
     def check_now() -> None:
         backend.call(capture.capture_now())
 
-    panel = Panel(state, on_check=lambda cid: backend.call_soon(backend.service.check, cid), status_text=status_text)
+    panel = Panel(state, on_check=lambda cid: backend.call_soon(backend.service.check, cid), status_text=status_text,
+                  auto_checks=settings.max_auto_checks_per_batch)
     overlays = OverlayManager(state, debug_visible_in_capture=os.environ.get("FACTCHECK_OVERLAY_DEBUG") == "1")
 
     def set_display(display: str) -> None:

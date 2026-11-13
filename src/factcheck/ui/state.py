@@ -11,12 +11,13 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from factcheck.capture.layout import locate_in_blocks
 from factcheck.models import Box, Claim, TextBlock, Verdict
 
-SCREEN_LAYOUT_TTL_S = 60.0          # hotkey (whole-screen) boxes disappear after this or on any frame change
+SCREEN_LAYOUT_TTL_S = 60.0          # hotkey (whole-screen) boxes disappear this long after the screen's last result
+                                    # (not after the capture: verdicts take 20-60 s) or on any frame change
 
 
 class Bridge(QObject):
@@ -49,9 +50,14 @@ class UiState(QObject):
         self.layout_time: dict[str, float] = {}
         self.stale: set[str] = set()
         self.messages: list[str] = []
+        self.expiry = QTimer(self)                       # drop old hotkey boxes on time, even when no event arrives
+        self.expiry.timeout.connect(self.expire)
+        self.expiry.start(1000)
 
     def on_event(self, e: dict) -> None:
         kind, sid = e.get("type"), e.get("source_id")
+        if sid in self.layout_time and kind in ("claims", "verdict", "status"):
+            self.layout_time[sid] = time.monotonic()     # restart the clock: boxes stay readable after each result
         if kind == "claims":
             for c in e["claims"]:
                 if c.id not in self.claims:
@@ -81,16 +87,23 @@ class UiState(QObject):
             self.order = self.order[-800:]
         self.changed.emit()
 
-    def overlay_items(self) -> list[OverlayItem]:
-        """Boxes to draw now: claims whose source layout is fresh and where the span can be located."""
+    def expire(self) -> None:
+        """Forget whole-screen layouts with no result for SCREEN_LAYOUT_TTL_S (the screen has likely changed since)."""
         now = time.monotonic()
+        old = [s for s in self.layouts if s.startswith("screen:") and now - self.layout_time.get(s, now) > SCREEN_LAYOUT_TTL_S]
+        for sid in old:
+            self.layouts.pop(sid)
+            self.layout_time.pop(sid, None)
+        if old:
+            self.changed.emit()
+
+    def overlay_items(self) -> list[OverlayItem]:
+        """Boxes to draw now: claims whose source layout is current and where the span can be located."""
         items = []
         for cid in self.order:
             claim = self.claims[cid]
             sid = claim.source.source_id
             if claim.source.kind != "desktop" or sid in self.stale or sid not in self.layouts:
-                continue
-            if sid.startswith("screen:") and now - self.layout_time.get(sid, 0) > SCREEN_LAYOUT_TTL_S:
                 continue
             boxes = locate_in_blocks(self.layouts[sid], claim.span, claim.block_id)
             if not boxes:
