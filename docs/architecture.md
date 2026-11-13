@@ -18,14 +18,16 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
 * **Triggers.** By default nothing leaves a page until the user asks: toolbar button *Check this page now*,
   `Alt+Shift+F` (`commands`), or the right-click item. *Check pages automatically* in Options restores the
   automatic mode (on load, scroll and DOM changes).
+* **No length limits.** A block is left out only when it has no text (user decision, 2026-11-13). The former
+  40-character minimum and 4,000-character maximum dropped short comments and whole long X posts (one element,
+  5,451 characters measured); the server no longer truncates blocks or caps their number either.
 * **Part of a page.** `Alt+Shift+S` (`check-part`) or the popup's *Check part of page…*: with a non-empty selection,
   `checkRange` keeps the blocks with a text node the selection intersects (`Range.intersectsNode`); otherwise a box
   picker opens inside the closed shadow root and keeps the blocks with a text line box overlapping the box
   (`Range.getClientRects`). Whole blocks are sent either way, so claims keep their context and underlines map to
   exact ranges. The right-click item uses `checkRange` too. A checked selection is cleared (otherwise the next press
   silently re-checked it instead of opening the box), each part check toasts what it is checking, and the key
-  closes an open picker. Picks keep blocks down to 8 characters (page checks: 40), send only the picked text nodes
-  of a block over 4,000 characters, and count text as inside the box only where `elementFromPoint` shows it is on
+  closes an open picker. The box counts text as inside only where `elementFromPoint` shows it is on
   top (text scrolled out of a container or covered by another element is left out). Text with no DOM (canvas,
   images, cross-origin frames) can only be read with the desktop `Ctrl+Alt+R`, and the empty-pick message says so.
 * **On demand only.** The worker opens the WebSocket only when there is work (a check, or the popup/Options asking for
@@ -51,6 +53,20 @@ UI → backend through `asyncio.run_coroutine_threadsafe` / `call_soon_threadsaf
 | `verdict` | `source_id`, `claim_id`, `verdict: Verdict` | extension (colour + card), overlay, panel |
 | `layout` | `source_id`, `blocks: [TextBlock with OCR boxes]` | overlay (where to draw) |
 | `frame_changed` | `source_id` | overlay (hide boxes until the window settles) |
+
+## Claim extraction (`pipeline/extract.py`, `pipeline/prompts.py`)
+
+* **App: every claim, per sentence.** The text is split into numbered sentences (`sentence_units`, pysbd), and the
+  output schema has one required key per sentence id (`per_sentence_schema`), so the model has to answer for every
+  sentence (its claims, or an empty list). No cap on the number of claims. Each claim has an `importance` (1-3) and
+  the list is sorted by it, so the first `MAX_AUTO_CHECKS_PER_BATCH` (3) verified automatically are the central ones;
+  the rest wait for *Check this claim*. Measured on a 5,485-character X post: 17-18 claims and 8-9 of 9 reference
+  claims per run, against 5 claims and 5 of 9 with the earlier capped free-form list
+  ([table](../reports/generated/extraction-coverage.md), `scripts/extraction_coverage.py`).
+* **Eval: unchanged.** The evaluation passes an explicit cap, which selects the preregistered free-form prompt and
+  schema byte for byte.
+* Sentence ids are `s1`, `s2`, … because schema property names must match `^[a-zA-Z0-9_.-]{1,64}$` (the API
+  rejected `b1/3` with HTTP 400).
 
 ## Agent configuration (`pipeline/agent.py`, `pipeline/verify.py`)
 
