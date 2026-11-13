@@ -20,7 +20,7 @@ from huggingface_hub import HfApi
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "BurnyCoder/fact-check-what-you-see-results"
 COLLECTION_TITLE = "Fact-checking what you see"
-GITHUB = "https://github.com/BurnyCoder/fact-check-websites-apps"
+GITHUB = "https://github.com/BurnyCoder/auto-fact-checker-of-websites-apps"
 
 CARD = f"""---
 license: cc-by-nc-4.0

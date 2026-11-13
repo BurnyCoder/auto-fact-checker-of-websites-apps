@@ -65,9 +65,9 @@
   <h1>Fact-checking what you see — benchmark results</h1>
   <p>A Claude Haiku 5.5 agent (web search, page fetch, raw-data downloads, sandboxed bash) checks claims and returns one
     of four <a href="https://arxiv.org/abs/2305.13117">AVeriTeC</a> labels with a confidence score. This page shows the
-    <a href="https://github.com/BurnyCoder/fact-check-websites-apps/blob/main/reports/preregistration.md">preregistered</a> evaluation.
+    <a href="https://github.com/BurnyCoder/auto-fact-checker-of-websites-apps/blob/main/reports/preregistration.md">preregistered</a> evaluation.
     Every number is computed by <code>eval/report.py</code> from the per-claim result files in the
-    <a href="https://github.com/BurnyCoder/fact-check-websites-apps">repository</a>.</p>
+    <a href="https://github.com/BurnyCoder/auto-fact-checker-of-websites-apps">repository</a>.</p>
   <div class="cards" id="cards"></div>
 
   <h2>H1 / H2 — retrieval vs memory, and the value of existing fact-checks</h2>
@@ -105,6 +105,7 @@
 const ARM = { closed_book: "Closed-book (no web)", web_blocked: "Web, fact-check sites blocked", web_default: "Web, default (product)" };
 const ARMCOL = { closed_book: "var(--s1)", web_blocked: "var(--s2)", web_default: "var(--s3)" };
 const LABCOL = { "Supported": "var(--ok)", "Refuted": "var(--bad)", "Not Enough Evidence": "var(--nee)", "Conflicting Evidence/Cherrypicking": "var(--warn)" };
+const pText = (p) => (p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(3)}`);   // never print "p = 0.000"
 const pct = (x, d = 1) => x == null || isNaN(x) ? "–" : `${(100 * x).toFixed(d)} %`;
 const el = (tag, attrs = {}, text) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
 const svgEl = (tag, attrs = {}) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
@@ -203,10 +204,10 @@ async function main() {
   const conf = S.confirmatory || {};
   const arms = conf.arms || {};
   const cards = document.getElementById("cards");
-  if (conf.H1) cards.append(card("H1 retrieval (blocked web − closed-book)", `${conf.H1.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H1.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H1.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H1.accuracy_diff.ci95[1]).toFixed(1)}], p = ${conf.H1.mcnemar.p_one_sided.toFixed(3)} (one-sided)`));
-  if (conf.H2) cards.append(card("H2 fact-check access (default − blocked)", `${conf.H2.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H2.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H2.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H2.accuracy_diff.ci95[1]).toFixed(1)}], p = ${conf.H2.mcnemar.p_one_sided.toFixed(3)} (one-sided)`));
+  if (conf.H1) cards.append(card("H1 retrieval (blocked web − closed-book)", `${conf.H1.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H1.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H1.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H1.accuracy_diff.ci95[1]).toFixed(1)}], ${pText(conf.H1.mcnemar.p_one_sided)} (one-sided)`));
+  if (conf.H2) cards.append(card("H2 fact-check access (default − blocked)", `${conf.H2.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * conf.H2.accuracy_diff.diff).toFixed(1)} pts`, `95 % CI [${(100 * conf.H2.accuracy_diff.ci95[0]).toFixed(1)}, ${(100 * conf.H2.accuracy_diff.ci95[1]).toFixed(1)}], ${pText(conf.H2.mcnemar.p_one_sided)} (one-sided)`));
   if (S.h3) cards.append(card("H3 OCR − clean text", `${S.h3.diff.accuracy_diff.diff >= 0 ? "+" : ""}${(100 * S.h3.diff.accuracy_diff.diff).toFixed(1)} pts`, `one-sided 95 % lower bound ${(100 * S.h3.diff.accuracy_diff.lower_one_sided_95).toFixed(1)} pts (margin −3)`));
-  if (S.h4) cards.append(card("H4 check-worthiness F1", S.h4.f1.toFixed(2), `best baseline (${S.h4.best_baseline}) ${Math.max(S.h4.baseline_all_positive_f1, S.h4.baseline_heuristic_f1).toFixed(2)}, p = ${S.h4.permutation_p_vs_best.toFixed(4)}`));
+  if (S.h4) cards.append(card("H4 check-worthiness F1", S.h4.f1.toFixed(2), `best baseline (${S.h4.best_baseline}) ${Math.max(S.h4.baseline_all_positive_f1, S.h4.baseline_heuristic_f1).toFixed(2)}, ${pText(S.h4.permutation_p_vs_best)}`));
   document.getElementById("h12text").textContent = conf.H1 ? `Accuracy on ${arms.closed_book?.n ?? "?"} preregistered AVeriTeC dev claims (label-stratified). Whiskers: 95 % bootstrap intervals. Dashed line: always predicting the majority label (Refuted).` : "Confirmatory results not available yet.";
   bars(document.getElementById("accChart"), Object.entries(arms).map(([k, a]) => ({ label: ARM[k], value: a.accuracy, lo: a.accuracy_ci95[0], hi: a.accuracy_ci95[1], color: ARMCOL[k], note: `n=${a.n}` })),
        { ylabel: "Accuracy", refs: conf.baseline_majority_accuracy ? [{ label: "majority class", value: conf.baseline_majority_accuracy }] : [] });

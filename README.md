@@ -1,4 +1,4 @@
-# fact-check-websites-apps
+# auto-fact-checker-of-websites-apps
 
 **Fact-check the claims you see — in Chrome and in any desktop app (Discord, Slack, PDFs, ...).**
 A Chrome extension underlines claims inline on web pages; for everything else, Windows OCR reads the
@@ -61,7 +61,7 @@ on a $10 API-equivalent budget, which limited the web-search comparisons to 120 
 In plainer words: see [`reports/summary.md`](reports/summary.md). Full reports: [retrieval vs memory](reports/exp-02-h1-h2-retrieval.md) ·
 [OCR channel](reports/exp-03-h3-ocr.md) · [check-worthiness](reports/exp-04-h4-checkworthiness.md) ·
 [variance](reports/exp-05-e2-variance.md) · [corrections](reports/exp-06-e3-corrections.md) · [paper](reports/paper/paper.pdf) ·
-[interactive explorer](https://burnycoder.github.io/fact-check-websites-apps/).
+[interactive explorer](https://burnycoder.github.io/auto-fact-checker-of-websites-apps/).
 
 ![Accuracy by condition](reports/figures/confirmatory_accuracy.png)
 
@@ -131,8 +131,8 @@ usually preinstalled — check with `wsl -e bwrap --version`), Google Chrome, an
 [Claude Code](https://code.claude.com/docs) (or an Anthropic API key).
 
 ```bash
-git clone https://github.com/BurnyCoder/fact-check-websites-apps
-cd fact-check-websites-apps
+git clone https://github.com/BurnyCoder/auto-fact-checker-of-websites-apps
+cd auto-fact-checker-of-websites-apps
 uv sync
 wsl.exe -e bash scripts/setup_wsl_sandbox.sh
 copy .env.example .env
