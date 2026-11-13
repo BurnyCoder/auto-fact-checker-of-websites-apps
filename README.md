@@ -1,12 +1,12 @@
 # auto-fact-checker-of-websites-apps
 
-**Fact-check the claims you see — in Chrome and in any desktop app (Discord, Slack, PDFs, ...).**
+**Fact-check the claims you see, in Chrome and in any desktop app (Discord, Slack, PDFs, ...).**
 A Chrome extension underlines claims inline on web pages; for everything else, Windows OCR reads the
 screen and a click-through overlay boxes each claim. Every claim is checked by a
 [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview.md) agent running **Haiku 5.5** with web search, page fetch, an audited
 file-download tool and a **sandboxed bash shell** (python/numpy/pandas/sympy, node, deno, gcc, … inside
 bubblewrap in WSL2). Each verdict carries one of the four [AVeriTeC](https://arxiv.org/abs/2305.13117) labels, a **confidence score with the
-reasoning for that confidence**, sources with quote checks, and — for false or cherry-picked claims — a
+reasoning for that confidence**, sources with quote checks, and, for false or cherry-picked claims, a
 **sourced correction**.
 
 | Browser (extension, real Haiku verdicts on a live page) | Desktop (overlay on a rendered chat, real Haiku verdicts) |
@@ -33,10 +33,10 @@ on a $10 API-equivalent budget, which limited the web-search comparisons to 120 
 13.5–17.5 accuracy points), so small effects show up as "inconclusive", not as "no effect".
 
 <!-- GEN:readme_results -->
-* **H1 — Web tools (fact-check sites blocked) vs answering from memory:** +21.7 accuracy points (95 % CI +11.7 to +30.8; n = 120; Holm-adjusted p < 0.001) → **supported**.
-* **H2 — Allowing existing fact-check sites vs blocking them:** +1.7 accuracy points (95 % CI -5.8 to +9.2; n = 120; Holm-adjusted p = 0.412) → not supported (inconclusive at this sample size).
-* **H3 — Reading the claim through rendering + Windows OCR vs exact text:** +0.8 points (one-sided 95 % lower bound -2.0; margin −3; n = 500; mean OCR character error rate 1.09 %) → **non-inferior**.
-* **H4 — Finding check-worthy sentences (CheckThat! 2024):** F1 0.759 vs best simple baseline 0.424 (Holm-adjusted p < 0.001) → **supported**.
+* **H1. Web tools (fact-check sites blocked) vs answering from memory:** +21.7 accuracy points (95 % CI +11.7 to +30.8; n = 120; Holm-adjusted p < 0.001) → **supported**.
+* **H2. Allowing existing fact-check sites vs blocking them:** +1.7 accuracy points (95 % CI -5.8 to +9.2; n = 120; Holm-adjusted p = 0.412) → not supported (inconclusive at this sample size).
+* **H3. Reading the claim through rendering + Windows OCR vs exact text:** +0.8 points (one-sided 95 % lower bound -2.0; margin −3; n = 500; mean OCR character error rate 1.09 %) → **non-inferior**.
+* **H4. Finding check-worthy sentences (CheckThat! 2024):** F1 0.759 vs best simple baseline 0.424 (Holm-adjusted p < 0.001) → **supported**.
 * **Confidence calibration (product setting):** mean stated confidence 78.5 % vs accuracy 71.7 %; Brier 0.157, ECE 0.104.
 * **Run-to-run variance (E2):** Fleiss' κ = 0.68 across 3 runs; same label in all runs for 68.0 % of claims.
 * **Corrections (E3):** of 87 corrections, the judge found 45 consistent with the professional fact-check, 33 partially, 3 contradicting, and 6 where the professional verdict says the claim was true.
@@ -147,7 +147,7 @@ Details: [docs/architecture.md](docs/architecture.md) · security model: [docs/s
 ## Install
 
 Requirements: Windows 11, [uv](https://docs.astral.sh/uv/), WSL2 with Ubuntu (for the sandbox; `bubblewrap` is
-usually preinstalled — check with `wsl -e bwrap --version`), Google Chrome, and a Claude subscription logged in to
+usually preinstalled: check with `wsl -e bwrap --version`), Google Chrome, and a Claude subscription logged in to
 [Claude Code](https://code.claude.com/docs) (or an Anthropic API key).
 
 ```bash
@@ -167,7 +167,7 @@ copy .env.example .env
   single-user use; the SDK docs ask distributed products to use API keys
   ([legal](https://code.claude.com/docs/en/legal-and-compliance.md)).
 * **Chrome extension** (needs the app running for the token):
-  1. `uv run factcheck` — a blue check-mark icon appears in the Windows tray (maybe behind the `^` arrow).
+  1. `uv run factcheck`: a blue check-mark icon appears in the Windows tray (maybe behind the `^` arrow).
   2. Right-click it → *Copy extension token*.
   3. In Chrome open `chrome://extensions`, switch on *Developer mode* (top right), click *Load unpacked* (top left)
      and select this repo's `extension/` folder. The card "Fact Check What You See" must show the ID

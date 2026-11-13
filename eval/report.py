@@ -526,12 +526,12 @@ def blocks_readme(summary: dict) -> dict[str, str]:
         if h in c:
             d = c[h]["accuracy_diff"]
             ph = holm.get(h, {}).get("p_holm")
-            lines.append(f"* **{h} — {what}:** {pts(d['diff'])} accuracy points (95 % CI {pts(d['ci95'][0])} to "
+            lines.append(f"* **{h}. {what}:** {pts(d['diff'])} accuracy points (95 % CI {pts(d['ci95'][0])} to "
                          f"{pts(d['ci95'][1])}; n = {c[h]['n_paired']}; Holm-adjusted {p_text(ph)}) → {decision_h(ph, d['diff'])}.")
     if "h3" in summary:
         d = summary["h3"]["diff"]["accuracy_diff"]
         ok = d["lower_one_sided_95"] > -0.03
-        lines.append(f"* **H3 — Reading the claim through rendering + Windows OCR vs exact text:** {pts(d['diff'])} points "
+        lines.append(f"* **H3. Reading the claim through rendering + Windows OCR vs exact text:** {pts(d['diff'])} points "
                      f"(one-sided 95 % lower bound {pts(d['lower_one_sided_95'])}; margin −3; n = {summary['h3']['diff']['n_paired']}; "
                      f"mean OCR character error rate {pct(summary['h3']['arms']['h3_ocr']['cer_mean'], 2)}) → "
                      f"{'**non-inferior**' if ok else '**non-inferiority not shown**'}.")
@@ -539,7 +539,7 @@ def blocks_readme(summary: dict) -> dict[str, str]:
         h = summary["h4"]
         best = max(h["baseline_all_positive_f1"], h["baseline_heuristic_f1"])
         ph = holm.get("H4", {}).get("p_holm")
-        lines.append(f"* **H4 — Finding check-worthy sentences (CheckThat! 2024):** F1 {h['f1']:.3f} vs best simple baseline "
+        lines.append(f"* **H4. Finding check-worthy sentences (CheckThat! 2024):** F1 {h['f1']:.3f} vs best simple baseline "
                      f"{best:.3f} (Holm-adjusted {p_text(ph)}) → {decision_h(ph, h['f1'] - best)}.")
     if c.get("arms", {}).get("web_default"):
         a = c["arms"]["web_default"]
